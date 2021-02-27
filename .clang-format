@@ -1,0 +1,3 @@
+BasedOnStyle: Microsoft
+BreakBeforeBraces: Allman
+ColumnLimit: '80'
