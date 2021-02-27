@@ -1,0 +1,9 @@
+[submodule "vendor/tvision"]
+	path = vendor/tvision
+	url = https://github.com/magiblot/tvision.git
+[submodule "vendor/libucl"]
+	path = vendor/libucl
+	url = ../libucl
+[submodule "vendor/libkqueue"]
+	path = vendor/libkqueue
+	url = ../../eComCloud/libkqueue

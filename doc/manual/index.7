@@ -1,0 +1,45 @@
+.Dd February 12, 2021
+.Dt INDEX 7
+.Os eComInit
+
+.Sh NAME
+.Nm index
+.Nd index to the eComInit Manual
+
+.Sh DESCRIPTION
+
+This is the eComInit Manual, the authoritative reference on the operation of the
+eComInit system resource manager.
+
+.Ss Miscellaneous Information Manual
+
+.Bl -tag
+.It Xr ecominit 7
+Conceptual overview of the eComInit service system resource manager.
+.It Xr eci_bootstrap 7
+How a system or auxiliary eComInit manager is bootstrapped.
+.It Xr eci_restarter 7
+Conventions and common properties of all restarters.
+.It Xr eci_method 7
+Details
+.Em methods ,
+conventions which all restarters adopting the UNIX\(rg process model understand.
+.El
+
+.Ss System Management Commands
+
+.Bl -tag
+.It Xr eciadm 8
+Service management console.
+.El
+
+.Ss Daemons
+
+.Bl -tag
+.It Xr eci.auxinit 8
+Auxiliary process control initialisation.
+.It Xr eci.init 8
+Process control initialisation.
+.It Xr eci.startd 8
+The main restarter.
+.El

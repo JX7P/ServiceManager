@@ -1,0 +1,50 @@
+/*******************************************************************
+
+    PROPRIETARY NOTICE
+
+These coded instructions, statements, and computer programs contain
+proprietary information of eComCloud Object Solutions, and they are
+protected under copyright law. They may not be distributed, copied,
+or used except under the provisions of the terms of the Source Code
+Licence Agreement, in the file "LICENCE.md", which should have been
+included with this software
+
+    Copyright Notice
+
+    (c) 2021 eComCloud Object Solutions.
+        All rights reserved.
+********************************************************************/
+
+#ifndef ECI_COMPAT_H_
+#define ECI_COMPAT_H_
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#define ECI_VER "@ECI_VER@"
+#define ECI_CPYRIGHT "@ECI_CPYRIGHT@"
+#define ECI_USE "@ECI_USE@"
+
+#define ECI_VERSTRING ECI_VER "\n" ECI_CPYRIGHT "\n" ECI_USE
+
+#define ECI_PREFIX "@CMAKE_INSTALL_PREFIX@"
+#define ECI_LIBECIDIR "@ECI_LIBECIDIR@"
+#define ECI_LIBEXECDIR ECI_PREFIX "/@CMAKE_INSTALL_LIBEXECDIR@"
+
+#define ECI_CONFIGD_BIN ECI_LIBEXECDIR "/eci.configd"
+#define ECI_MI_SCRIPT ECI_LIBECIDIR "/method/manifest-import.ksh"
+
+#define ECI_SD_NOTIFY_TYPE "@ECI_SD_NOTIFY_TYPE@"
+
+#cmakedefine ECI_PLAT_BSD
+#cmakedefine ECI_PLAT_HPUX
+#cmakedefine ECI_PLAT_LINUX
+#cmakedefine ECI_SYS_ENDIAN_H_EXISTS
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
