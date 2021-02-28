@@ -15,7 +15,9 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#include <sys/param.h>
 #include <sys/signal.h>
+#include <sys/wait.h>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -112,4 +114,13 @@ int eciExitWasAbnormal(int wstat)
     }
     else
         return 1;
+}
+
+int timeSpecToMSecs(struct timespec *ts)
+{
+    int msecs;
+    if (ts == 0)
+        return -1;
+    msecs = ts->tv_nsec / 1000000;
+    return msecs + ts->tv_sec * 1000;
 }

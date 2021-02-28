@@ -15,6 +15,7 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#include <csignal>
 #include <cstdio>
 
 #include "Manager.hh"
@@ -34,11 +35,14 @@ int main()
 {
     struct timespec ts;
     EventLoop loop;
-    ts.tv_nsec = 99999999;
+    ts.tv_nsec = 999999999;
     ts.tv_sec = 1;
     loop.init();
     printf("Added timer %d\n", loop.addTimer(&ts));
-    loop.loop(0);
+    loop.addSignal(SIGUSR1);
+    ts.tv_nsec = 999999999;
+    ts.tv_sec = 3;
+    loop.loop(&ts);
     gMgr.init();
     gMgr.run();
 }

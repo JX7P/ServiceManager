@@ -15,29 +15,46 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#include <sys/time.h>
+
 #include "eci/Platform.h"
 
-typedef struct ECIPendingProcess
+#ifdef __cplusplus
+extern "C"
 {
-    int fd[2];
-    pid_t pid;
-} ECIPendingProcess;
+#endif
 
-/**
- * Forks a process for the command specified. This process waits until
- * eciPendingProcessContinue() is called.
- */
-ECIPendingProcess *eciProcessForkAndWait(const char *cmd_,
-                                         void (*cleanup_cb)(void *),
-                                         void *cleanup_cb_arg);
-/**
- * Tells the child process to continue and frees the ECIPendingProcess
- * structure.
- */
-void eciPendingProcessContinue(ECIPendingProcess *pwait);
+    typedef struct ECIPendingProcess
+    {
+        int fd[2];
+        pid_t pid;
+    } ECIPendingProcess;
 
-/**
- * Inspect the result of a wait() call. Returns 0 for a healthy exit, and either
- * signal number or return code if not.
- */
-int eciExitWasAbnormal(int wstat);
+    /**
+     * Forks a process for the command specified. This process waits until
+     * eciPendingProcessContinue() is called.
+     */
+    ECIPendingProcess *eciProcessForkAndWait(const char *cmd_,
+                                             void (*cleanup_cb)(void *),
+                                             void *cleanup_cb_arg);
+    /**
+     * Tells the child process to continue and frees the ECIPendingProcess
+     * structure.
+     */
+    void eciPendingProcessContinue(ECIPendingProcess *pwait);
+
+    /**
+     * Inspect the result of a wait() call. Returns 0 for a healthy exit, and
+     * either signal number or return code if not.
+     */
+    int eciExitWasAbnormal(int wstat);
+
+    /**
+     * Converts a struct timespec to milliseconds. If \param ts is a NULL
+     * pointer, returns -1.
+     */
+    int timeSpecToMSecs(struct timespec *ts);
+
+#ifdef __cplusplus
+}
+#endif

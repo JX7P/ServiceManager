@@ -18,14 +18,17 @@ included with this software
 #include <sys/types.h>
 #include <sys/poll.h>
 
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
 
+#include "eci/Core.h"
 #include "eci/Event.hh"
 
 struct TimerEntry
@@ -38,14 +41,14 @@ struct TimerEntry
 /* Self-pipe. We write to this to wake up poll() after we get signalled. */
 static int sigPipe[2];
 
-/* Did a signal fire during poll() ? */
+/* Did any signal fire since last we checked? */
 bool signalFired;
+
+/* Did a particular signal number fire since last we checked? */
+static bool signalsFired[NSIG];
 
 /* We allow 255 timers per event loop. */
 static TimerEntry timers[255];
-
-/* For every signal, a boolean value indicating whether it fired or not. */
-static bool signalsFired[NSIG];
 
 void EventLoop::sigHandler(int signum, siginfo_t *siginfo, void *ctx)
 {
@@ -53,9 +56,10 @@ void EventLoop::sigHandler(int signum, siginfo_t *siginfo, void *ctx)
     printf("Sig %d val %d!\n", signum, siginfo->si_value);
     if (signum == SIGALRM)
         timers[siginfo->si_value.sival_int].fired = true;
+    signalFired = true;
     signalsFired[signum] = true;
     if (write(sigPipe[1], ".", 1) == -1)
-        printf("FAILED TO WRITE: %s\n", strerror(errno));
+        printf("FAILED TO WRITE TO SIGNAL SELFPIPE!! %s\n", strerror(errno));
     errno = savedErrno;
 }
 
@@ -95,7 +99,7 @@ int EventLoop::addTimer(struct timespec *ts)
 
     if (entryId == -1)
     {
-        printf("Too many timers!\n");
+        log(kErr, "Maximum number of timers (255) exceeded.\n");
         return -E2BIG;
     }
 
@@ -104,7 +108,7 @@ int EventLoop::addTimer(struct timespec *ts)
 
     sigev.sigev_notify = SIGEV_SIGNAL;
     sigev.sigev_signo = SIGALRM;
-    sigev.sigev_value.sival_int = 42; // entryId;
+    sigev.sigev_value.sival_int = entryId;
 
     r = timer_create(CLOCK_REALTIME, &sigev, &timers[entryId].timer);
     if (r == -1)
@@ -137,9 +141,21 @@ int EventLoop::init()
     r = addSignal(SIGALRM);
     if (r < 0)
         return r;
+
+    /* only need one at first, for our selfpipe */
+    pFDs = (struct pollfd *)malloc(sizeof *pFDs);
+    if (!pFDs)
+    {
+        loge(kErr, errno, "Failed to allocate pollfd array");
+        return -errno;
+    }
+    nPFDs = 1;
+    pFDs[0].fd = sigPipe[0];
+    pFDs[0].events = POLLIN;
+    pFDs[0].revents = 0;
 }
 
-int EventLoop::loop(int nMSecs)
+int EventLoop::loop(struct timespec *ts)
 {
     int r;
     bool oldSigFired;
@@ -159,14 +175,52 @@ sigfired:
             {
                 /* FIXME: atomic */
                 signalsFired[i] = false;
+                if (i == SIGALRM)
+                {
+                    /* timer went off */
+                    printf("TIMER WENT OFF!\n");
+
+                    continue;
+                }
+
+                /* something other than a timer went off, therefore let us
+                 * dispatch */
                 printf("Signal %d fired\n", i);
             }
 
+runpoll:
     if (!haveRunPoll)
-        r = poll(NULL, 0, -1);
+        r = poll(pFDs, nPFDs, timeSpecToMSecs(ts));
     haveRunPoll = true;
+
+    if (r == -1)
+        if (errno == EINTR)
+        {
+            /* GNU/Linux ignores SA_RESTART for poll() for whatever reason. Let
+             * us therefore return to poll() and it will probably return at once
+             * with POLLIN on the self-pipe. */
+            haveRunPoll = false;
+            goto runpoll;
+        }
+        else
+            loge(kWarn, errno, "Poll returned -1");
+
+    if (pFDs[0].revents)
+    {
+        assert(pFDs[0].revents = POLLIN);
+        pFDs[0].revents = 0; /* signal selfpipe written to */
+    }
+
+    for (int i = 1; i < nPFDs; i++)
+        if (pFDs[i].revents)
+        {
+            printf("Revent on FD %d\n", pFDs[i].fd);
+            pFDs[i].revents = 0;
+        }
 
     /* can happen */
     if (signalFired)
         goto sigfired;
+
+    return r;
 }

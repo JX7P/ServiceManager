@@ -15,33 +15,41 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#include "eci/Logger.hh"
 #include "eci/Platform.h"
 
 #if defined(ECI_EVENT_DRIVER_Poll)
-
+#include <sys/poll.h>
 #include <sys/signal.h>
-
 #include <time.h>
 
 typedef timer_t TimerID;
 #elif defined(ECI_EVENT_DRIVER_EPoll)
 #warning EPoll Driver
-#eif defined(ECI_EVENT_DRIVER_KQueue)
-#warning KQueue
+#elif defined(ECI_EVENT_DRIVER_KQueue)
+
+typedef int TimerID;
 #endif
 
-class EventLoop
+class EventLoop : Logger
 {
 #if defined(ECI_EVENT_DRIVER_Poll)
 #warning Poll driver
+    int nPFDs;
+    struct pollfd *pFDs;
+
     static void sigHandler(int signum, siginfo_t *siginfo, void *ctx);
 #elif defined(ECI_EVENT_DRIVER_EPoll)
 #warning EPoll Driver
-#eif defined(ECI_EVENT_DRIVER_KQueue)
+    int epollFD;
+#elif defined(ECI_EVENT_DRIVER_KQueue)
 #warning KQueue
+    int kqFD;
 #endif
 
   public:
+    EventLoop(Logger *parent = NULL) : Logger("evloop", parent){};
+
     /**
      *  Begin monitoring an FD for events.
      *
@@ -59,7 +67,7 @@ class EventLoop
     /**
      * Adds a timer to go off in \param ts time.
      *
-     * @returns A unique timer ID (>= 0 < 256) if successful.
+     * @returns A unique timer ID (>= 0) if successful.
      * @returns -errno if unsuccessful.
      */
     int addTimer(struct timespec *ts);
@@ -72,11 +80,13 @@ class EventLoop
     int init();
 
     /**
-     * Begin an event-loop iteration for a max of \param ts time.
+     * Begin an event-loop iteration for a max of \p ts time.
+     * If \param ts is a NULL pointer, waits indefinitely for an event.
+     * If \param ts points to a zero-valued timespec, returns immediately.
      *
      * @returns -errno if an error is encountered
      * @returns 0 if timed out
      * @returns >0 if events were received and dispatched.
      */
-    int loop(int ms);
+    int loop(struct timespec *ts);
 };
