@@ -36,15 +36,75 @@ included with this software
 /* Self-pipe. We write to this to wake up kevent() on user request. */
 static int sigPipe[2];
 
-int EventLoop::addFD(int fd)
-{
-    return 0;
-}
-
-int EventLoop::addSignal(int signum)
+int EventLoop::addFD(Handler *handler, int fd, int events)
 {
     struct kevent ev;
     int r;
+    bool addedRead = false;
+
+    try
+    {
+        fdSources.emplace_back(handler, fd);
+    }
+    catch (std::bad_alloc)
+    {
+        loge(kErr, ENOMEM, "Failed to allocate FD source descriptor");
+        return -ENOMEM;
+    }
+
+    if (events & POLLIN)
+    {
+        EV_SET(&ev, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+
+        if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+        {
+            loge(Logger::kWarn, errno,
+                 "Failed to add read event filter for FD %d\n", fd);
+            fdSources.pop_back();
+            return -errno;
+        }
+
+        addedRead = true;
+    }
+    if (events & POLLOUT)
+    {
+        EV_SET(&ev, fd, EVFILT_WRITE, EV_ADD, 0, 0, 0);
+
+        if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+        {
+            loge(Logger::kWarn, errno,
+                 "Failed to add write event filter for FD %d\n", fd);
+            fdSources.pop_back();
+            if (addedRead)
+            {
+                EV_SET(&ev, fd, EVFILT_READ, EV_DELETE, 0, 0, 0);
+                if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+                {
+                    loge(Logger::kErr, errno,
+                         "Failed to delete wread event filter for FD %d\n", fd);
+                }
+            }
+            return -errno;
+        }
+    }
+
+    return 0;
+}
+
+int EventLoop::addSignal(Handler *handler, int signum)
+{
+    struct kevent ev;
+    int r;
+
+    try
+    {
+        sigSources.emplace_back(handler, signum);
+    }
+    catch (std::bad_alloc)
+    {
+        loge(kErr, ENOMEM, "Failed to allocate signal source descriptor");
+        return -ENOMEM;
+    }
 
     EV_SET(&ev, signum, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
 
@@ -52,22 +112,49 @@ int EventLoop::addSignal(int signum)
     {
         loge(Logger::kWarn, errno, "Failed to add event filter for signal \n",
              signum);
+        sigSources.pop_back();
         return -errno;
     }
     /**
      * On BSD, setting a signal event filter on a Kernel Queue does NOT
-     * supersede ordinary signal disposition. Therefore we ignore the signal;
-     * it'll be multiplexed into our event loop instead.
+     * supersede ordinary signal disposition. Therefore we ignore the
+     * signal; it'll be multiplexed into our event loop instead.
      */
     if (signal(signum, SIG_IGN) == SIG_ERR)
-        return -errno;
+    {
+        int olderrno = errno;
+        loge(Logger::kWarn, errno, "Failed to ignore signal %d\n", signum);
+        sigSources.pop_back();
+
+        EV_SET(&ev, signum, EVFILT_SIGNAL, EV_DELETE, 0, 0, 0);
+
+        if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+        {
+            loge(Logger::kWarn, errno,
+                 "Failed to delete event filter for signal \n", signum);
+            sigSources.pop_back();
+            return -errno;
+        }
+
+        return -olderrno;
+    }
 }
 
-int EventLoop::addTimer(struct timespec *ts)
+int EventLoop::addTimer(Handler *handler, struct timespec *ts)
 {
     struct kevent ev;
-    TimerID id = abs(rand());
+    TimerDesc id = abs(rand());
     int r;
+
+    try
+    {
+        timerSources.emplace_back(handler, id);
+    }
+    catch (std::bad_alloc)
+    {
+        loge(kErr, ENOMEM, "Failed to allocate timer source descriptor");
+        return -ENOMEM;
+    }
 
     EV_SET(&ev, id, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, timeSpecToMSecs(ts),
            0);
@@ -76,10 +163,96 @@ int EventLoop::addTimer(struct timespec *ts)
     if (r == -1)
     {
         loge(Logger::kWarn, errno, "Failed to add event filter for timer");
+        timerSources.pop_back();
         return -errno;
     }
 
     return id;
+}
+
+int EventLoop::delFD(int fd)
+{
+    bool found = false;
+    bool succeeded = false;
+    struct kevent ev;
+    int r;
+    std::list<FDSource>::iterator it;
+
+    for (it = fdSources.begin(); it != fdSources.end(); it++)
+    {
+        if (it->fd == fd)
+        {
+            found = true;
+            fdSources.erase(it);
+            break;
+        }
+    }
+
+    if (!found)
+        log(kWarn,
+            "No source descriptor found for FD %d - "
+            "trying to delete KEvent filters anyway\n",
+            fd);
+
+    EV_SET(&ev, fd, EVFILT_READ, EV_DELETE, 0, 0, 0);
+
+    if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+        loge(Logger::kWarn, errno,
+             "Failed to delete read event filter for FD %d\n", fd);
+    else
+        succeeded = true;
+
+    EV_SET(&ev, fd, EVFILT_WRITE, EV_DELETE, 0, 0, 0);
+
+    if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+        loge(Logger::kWarn, errno,
+             "Failed to delete write event filter for FD %d\n", fd);
+    else
+        succeeded = true;
+
+    return succeeded ? 0 : -ENOENT;
+}
+
+int EventLoop::delSignal(int sigNum)
+{
+    log(kWarn, "Deleting signal events is not implemented\n");
+    return -EBADF;
+}
+
+int EventLoop::delTimer(int entryID)
+{
+    bool found = false;
+    bool succeeded = false;
+    int oldErrno;
+    struct kevent ev;
+    int r;
+    std::list<TimerSource>::iterator it;
+
+    for (it = timerSources.begin(); it != timerSources.end(); it++)
+        if (it->id == entryID)
+        {
+            found = true;
+            timerSources.erase(it);
+            break;
+        }
+
+    if (!found)
+        log(kWarn,
+            "No source descriptor found for timer %d - "
+            "trying to delete timer KEvent filter anyway\n",
+            entryID);
+
+    EV_SET(&ev, entryID, EVFILT_TIMER, EV_DELETE, 0, 0, 0);
+
+    if (kevent(kqFD, &ev, 1, 0, 0, 0) == -1)
+    {
+        oldErrno = errno;
+        loge(Logger::kWarn, errno,
+             "Failed to delete timer event filter for timer %d", entryID);
+        return -oldErrno;
+    }
+
+    return 0;
 }
 
 int EventLoop::init()
@@ -110,9 +283,30 @@ int EventLoop::loop(struct timespec *ts)
 
     switch (ev.filter)
     {
+    case EVFILT_READ:
+        printf("FD %d ready for read\n", ev.ident);
+        if (ev.flags & EV_EOF)
+            if (ev.data) /* POLLIN + POLLHUP */
+                printf("POLLIN+POLLHUP\n");
+            else /* POLLHUP only */
+                printf("POLLHUP\n");
+        else
+            printf("POLLIN\n"); /* POLLIN only */
+        break;
+
+    case EVFILT_WRITE:
+        printf("FD %d ready for write\n", ev.ident);
+        if (ev.flags & EV_EOF)
+            /* I believe one only gets POLLHUP and not POLLOUT at once */
+            printf("POLLHUP\n");
+        else
+            printf("POLLIN\n"); /* POLLIN only */
+        break;
+
     case EVFILT_TIMER:
         printf("Timer %d went off\n", ev.ident);
         break;
+
     case EVFILT_SIGNAL:
         printf("Signal %d arrived\n", ev.ident);
         break;

@@ -35,11 +35,16 @@ int main()
 {
     struct timespec ts;
     EventLoop loop;
+    int tim;
     ts.tv_nsec = 999999999;
     ts.tv_sec = 1;
     loop.init();
-    printf("Added timer %d\n", loop.addTimer(&ts));
-    loop.addSignal(SIGUSR1);
+    loop.addFD(NULL, fileno(stdin), POLLIN);
+    tim = loop.addTimer(NULL, &ts);
+    printf("Added timer %d\n", tim);
+    loop.delTimer(tim);
+    loop.delTimer(tim);
+    loop.addSignal(NULL, SIGUSR1);
     ts.tv_nsec = 999999999;
     ts.tv_sec = 3;
     loop.loop(&ts);
