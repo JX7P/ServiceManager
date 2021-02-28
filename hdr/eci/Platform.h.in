@@ -38,6 +38,11 @@ extern "C"
 
 #define ECI_SD_NOTIFY_TYPE "@ECI_SD_NOTIFY_TYPE@"
 
+#define ECI_EVENT_DRIVER "@ECI_EVENT_DRIVER@"
+#cmakedefine ECI_EVENT_DRIVER_EPoll
+#cmakedefine ECI_EVENT_DRIVER_KQueue
+#cmakedefine ECI_EVENT_DRIVER_Poll
+
 #cmakedefine ECI_PLAT_BSD
 #cmakedefine ECI_PLAT_HPUX
 #cmakedefine ECI_PLAT_LINUX

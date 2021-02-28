@@ -22,22 +22,23 @@ management solution.
 #### Further reading:
 
  - [Project Goals](doc/Goals.md): Lists the project goals for eComInit.
- - [Ports](doc/Ports.md): full details on eComInit's support for different
+ - [Ports](doc/Ports.rst): full details on eComInit's support for different
    platforms.
 
 #### Platform Support
 
-Platform names link to [detailed information on port support](doc/Ports.md).
+See also [detailed information on port support](doc/Ports.rst).
 
 
-| Platform | Minimum version  |
-|-|-|
-| [FreeBSD](doc/Ports.md#freebsd) | 12.0   |
-| [NetBSD](doc/Ports.md#netbsd) | 8.0  |
-| [GNU/Linux](doc/Ports.md#gnulinux) | 4.0  |
-| [DragonFly BSD](doc/Ports.md#dragonfly-bsd) | 5.6 |
-| [OpenBSD](doc/Ports.md#openbsd) | 6.6  |
-| [HP-UX](doc/Ports.md#hp-ux) | 11.11 with Gold Quality Pack |
+| Platform      | Minimum version   |
+|-              |-                  |
+| FreeBSD       | 12.0              |
+| NetBSD        | 8.0               |
+| GNU/Linux     | 4.0               |
+| DragonFly BSD | 5.6               |
+| OpenBSD       | 6.6               |
+| Mac OS X      | 10.4              |
+| HP-UX         | 11iv1 w/ Gold Quality Pack |
 
 
 #### Licencing

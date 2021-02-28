@@ -6,7 +6,7 @@ target_include_directories (eci-core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/hdr>)
 
-add_library (eci Logger.cc WSRPC.cc)
+add_library (eci Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc)
 target_link_libraries (eci eci-core ucl)
 
 # installation

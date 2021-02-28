@@ -14,32 +14,43 @@ include (WSRPCGen)
 
 set (HDR ${PROJECT_SOURCE_DIR}/hdr)
 
+macro(SetBoth base value)
+set(${base} ${value})
+set(${base}_${value} TRUE)
+endmacro()
+
 if(UNIX AND NOT APPLE)
   if(CMAKE_SYSTEM_NAME MATCHES ".*Linux")
     set(ECI_PLAT_LINUX TRUE)
+    SetBoth(ECI_EVENT_DRIVER Poll)
     add_definitions("-D_GNU_SOURCE")
   elseif(CMAKE_SYSTEM_NAME MATCHES "kFreeBSD.*|FreeBSD")
     set(ECI_PLAT_BSD TRUE)
+    SetBoth(ECI_EVENT_DRIVER KQueue)
     set(FREEBSD TRUE)
   elseif(CMAKE_SYSTEM_NAME MATCHES "kNetBSD.*|NetBSD.*")
     set(ECI_PLAT_BSD TRUE)
+    SetBoth(ECI_EVENT_DRIVER KQueue)
     set(NETBSD TRUE)
   elseif(CMAKE_SYSTEM_NAME MATCHES "kOpenBSD.*|OpenBSD.*")
     set(ECI_PLAT_BSD TRUE)
+    SetBoth(ECI_EVENT_DRIVER KQueue)
     set(OPENBSD TRUE)
     # no credential passing over Unix datagram sockets in OpenBSD
     set(ECI_SD_NOTIFY_TYPE "stream")
   elseif(CMAKE_SYSTEM_NAME MATCHES "DragonFly.*")
     set(ECI_PLAT_BSD TRUE)
+    SetBoth(ECI_EVENT_DRIVER KQueue)
     set(DRAGONFLY TRUE)
   elseif(CMAKE_SYSTEM_NAME MATCHES "HP-UX")
+    set(ECI_PLAT_HPUX TRUE)
+    SetBoth(ECI_EVENT_DRIVER Poll)
     # no mdoc
     set(ECI_BUILD_MANUAL FALSE)
     # C++ compiler too old
     set(ECI_ENABLE_TVISION FALSE)
     # no peer authentication at all that I know of, at least in 11.11
     set(ECI_SD_NOTIFY_TYPE insecure)
-    set(ECI_PLAT_HPUX TRUE)
     # make _r functions available
     add_definitions(-D_REENTRANT=1)
   endif()
@@ -50,6 +61,7 @@ elseif(APPLE)
   set(OSX TRUE)
 endif()
 
+
 macro(FIfUnset flag enable)
     if(NOT DEFINED ${flag})
         set(${flag} ${enable})
@@ -57,7 +69,7 @@ macro(FIfUnset flag enable)
 endmacro(FIfUnset)
 
 FIfUnset(ECI_BUILD_MANUAL TRUE)
-FIfUnset(ECI_ENABLE_TVISION TRUE)
+FIfUnset(ECI_ENABLE_TVISION FALSE)
 FIfUnset(ECI_SD_NOTIFY_TYPE "datagram")
 
 add_subdirectory(vendor/libucl)
@@ -72,7 +84,7 @@ endif()
 add_subdirectory(lib/eci)
 add_subdirectory(lib/eci-daemon)
 
-add_subdirectory(cmd/mgr)
+add_subdirectory(cmd/manager)
 
 function(FShow name flag)
         message("  ${name}: ${${flag}}")

@@ -14,3 +14,31 @@ included with this software
     (c) 2015-2021 eComCloud Object Solutions.
         All rights reserved.
 ********************************************************************/
+
+#include <cstdio>
+
+#include "Manager.hh"
+#include "eci/Event.hh"
+
+Manager gMgr;
+
+void Manager::init()
+{
+}
+
+void Manager::run()
+{
+}
+
+int main()
+{
+    struct timespec ts;
+    EventLoop loop;
+    ts.tv_nsec = 99999999;
+    ts.tv_sec = 1;
+    loop.init();
+    printf("Added timer %d\n", loop.addTimer(&ts));
+    loop.loop(0);
+    gMgr.init();
+    gMgr.run();
+}

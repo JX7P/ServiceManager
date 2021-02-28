@@ -1,3 +1,15 @@
 BasedOnStyle: Microsoft
 BreakBeforeBraces: Allman
 ColumnLimit: '80'
+IncludeBlocks: Preserve
+IncludeCategories:
+ - Regex: '^<sys/param\.h>'
+   Priority: 1
+   SortPriority: 0
+ - Regex: '^<sys/types\.h>'
+   Priority: 1
+   SortPriority: 1
+ - Regex: '<sys.*/'
+   Priority: 1
+   SortPriority: 2
+SortIncludes: true
