@@ -20,6 +20,8 @@ included with this software
 
 #include <list>
 
+#include "eci/Event.hh"
+
 class Object
 {
     /**
@@ -83,7 +85,7 @@ struct Transaction
 {
 };
 
-class Manager
+class Manager : Handler
 {
   public:
     void init();

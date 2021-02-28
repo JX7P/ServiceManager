@@ -25,6 +25,21 @@ Manager gMgr;
 
 void Manager::init()
 {
+    struct timespec ts;
+    EventLoop loop;
+    int tim;
+    ts.tv_nsec = 999999999;
+    ts.tv_sec = 1;
+    loop.init();
+    loop.addFD(this, fileno(stdin), POLLIN);
+    tim = loop.addTimer(this, &ts);
+    printf("Added timer %d\n", tim);
+    //   loop.delTimer(tim);
+    //  loop.delTimer(tim);
+    loop.addSignal(this, SIGUSR1);
+    ts.tv_nsec = 999999999;
+    ts.tv_sec = 3;
+    loop.loop(&ts);
 }
 
 void Manager::run()
@@ -33,21 +48,6 @@ void Manager::run()
 
 int main()
 {
-    struct timespec ts;
-    EventLoop loop;
-    int tim;
-    ts.tv_nsec = 999999999;
-    ts.tv_sec = 1;
-    loop.init();
-    loop.addFD(NULL, fileno(stdin), POLLIN);
-    tim = loop.addTimer(NULL, &ts);
-    printf("Added timer %d\n", tim);
-    loop.delTimer(tim);
-    loop.delTimer(tim);
-    loop.addSignal(NULL, SIGUSR1);
-    ts.tv_nsec = 999999999;
-    ts.tv_sec = 3;
-    loop.loop(&ts);
     gMgr.init();
     gMgr.run();
 }

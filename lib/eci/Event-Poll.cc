@@ -305,12 +305,38 @@ sigfired:
         for (int i = 0; i < NSIG; i++)
             if (signalsFired[i] == true)
             {
+                bool handled;
+
                 /* FIXME: atomic */
                 signalsFired[i] = false;
+                handled = false;
+
                 if (i == SIGALRM)
                 {
-                    /* timer went off */
-                    printf("TIMER WENT OFF!\n");
+                    for (int timID = 0; timID < 255; timID++)
+                        if (timers[timID].valid && timers[timID].fired)
+                        {
+                            timers[timID].fired = false;
+                            timers[timID].valid = false;
+                            timers[timID].timer = 0;
+                            for (auto it = timerSources.begin();
+                                 it != timerSources.end(); it++)
+                            {
+                                if (it->id == timID)
+                                {
+                                    it->handler->timerEvent(this, timID);
+                                    timerSources.erase(it);
+                                    handled = true;
+                                    break;
+                                }
+                            }
+                            if (!handled)
+                                log(kWarn,
+                                    "Did not find a source descriptor for "
+                                    "timer entry %d\n",
+                                    timID);
+                            continue;
+                        }
 
                     continue;
                 }
@@ -318,6 +344,19 @@ sigfired:
                 /* something other than a timer went off, therefore let us
                  * dispatch */
                 printf("Signal %d fired\n", i);
+                for (auto it = sigSources.begin(); it != sigSources.end(); it++)
+                {
+                    if (it->sigNum == i)
+                    {
+                        it->handler->signalEvent(this, i);
+                        handled = true;
+                        continue;
+                    }
+                }
+
+                if (!handled)
+                    log(kWarn,
+                        "Did not find a signal descriptor for signal %d\n", i);
             }
 
 runpoll:
@@ -348,7 +387,18 @@ runpoll:
     for (int i = 1; i < nPFDs; i++)
         if (pFDs[i].revents)
         {
-            printf("Revent on FD %d\n", pFDs[i].fd);
+            int fd = pFDs[i].fd;
+
+            for (auto it = fdSources.begin(); it != fdSources.end(); it++)
+                if (it->fd == fd)
+                {
+                    it->handler->fdEvent(this, fd, pFDs[i].revents);
+                    goto proceed3;
+                }
+
+            log(kWarn, "Did not find a source descriptor for FD %d\n", fd);
+
+        proceed3:
             pFDs[i].revents = 0;
         }
 

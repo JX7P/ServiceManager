@@ -284,32 +284,92 @@ int EventLoop::loop(struct timespec *ts)
     switch (ev.filter)
     {
     case EVFILT_READ:
-        printf("FD %d ready for read\n", ev.ident);
-        if (ev.flags & EV_EOF)
-            if (ev.data) /* POLLIN + POLLHUP */
-                printf("POLLIN+POLLHUP\n");
-            else /* POLLHUP only */
-                printf("POLLHUP\n");
-        else
-            printf("POLLIN\n"); /* POLLIN only */
-        break;
-
     case EVFILT_WRITE:
-        printf("FD %d ready for write\n", ev.ident);
-        if (ev.flags & EV_EOF)
-            /* I believe one only gets POLLHUP and not POLLOUT at once */
-            printf("POLLHUP\n");
-        else
-            printf("POLLIN\n"); /* POLLIN only */
+    {
+        FDSource *src = NULL;
+
+        for (auto it = fdSources.begin(); it != fdSources.end(); it++)
+            if (it->fd == ev.ident)
+            {
+                src = &*it;
+                break;
+            }
+
+        if (!src)
+        {
+            log(kWarn, "Did not find a source descriptor for FD %d\n",
+                ev.ident);
+            break;
+        }
+
+        if (ev.filter == EVFILT_READ)
+        {
+            if (ev.flags & EV_EOF)
+                if (ev.data) /* data to be read: POLLIN + POLLHUP */
+                    src->handler->fdEvent(this, ev.ident, 0 | POLLIN | POLLHUP);
+                else /* no data to be read: POLLHUP only */
+                    src->handler->fdEvent(this, ev.ident, 0 | POLLHUP);
+            else
+                src->handler->fdEvent(this, ev.ident, 0 | POLLIN);
+        }
+        else /* EVFILT_WRITE */
+        {
+            if (ev.flags & EV_EOF)
+                /* I believe one only gets POLLHUP and not POLLOUT at once */
+                src->handler->fdEvent(this, ev.ident, 0 | POLLHUP);
+            else
+                src->handler->fdEvent(this, ev.ident,
+                                      0 | POLLOUT); /* POLLOUT only */
+        }
+
         break;
+    }
 
     case EVFILT_TIMER:
-        printf("Timer %d went off\n", ev.ident);
+    {
+        bool handled = false;
+
+        for (auto it = timerSources.begin(); it != timerSources.end(); it++)
+            if (it->id == ev.ident)
+            {
+                it->handler->timerEvent(this, ev.ident);
+                /* clear the timer since our timers are oneshot affairs */
+                timerSources.erase(it);
+                handled = true;
+                break;
+            }
+
+        if (!handled)
+        {
+            log(kWarn, "Did not find a source descriptor for timer %d\n",
+                ev.ident);
+            break;
+        }
+
         break;
+    }
 
     case EVFILT_SIGNAL:
-        printf("Signal %d arrived\n", ev.ident);
+    {
+        bool handled = false;
+
+        for (auto it = sigSources.begin(); it != sigSources.end(); it++)
+        {
+            if (it->sigNum == ev.ident)
+            {
+                it->handler->signalEvent(this, ev.ident);
+                handled = true;
+                break;
+            }
+        }
+
+        if (!handled)
+            log(kWarn, "Did not find a signal descriptor for signal %d\n",
+                ev.ident);
         break;
+    }
+    default:
+        log(kWarn, "Unhandled KEvent filter %d\n", ev.filter);
     }
     return 1;
 }

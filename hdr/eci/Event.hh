@@ -15,6 +15,9 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#ifndef ECI_EVENT_HH__
+#define ECI_EVENT_HH__
+
 #include <sys/poll.h>
 
 #include "eci/Logger.hh"
@@ -37,9 +40,18 @@ class EventLoop;
 class Handler
 {
     friend class EventLoop;
-    void fdEvent(EventLoop *loop, int fd, int revents){};
-    void timerEvent(EventLoop *loop, int id){};
-    void signalEvent(EventLoop *loop, int signum){};
+    virtual void fdEvent(EventLoop *loop, int fd, int revents)
+    {
+        printf("FD event! %d:%d\n", fd, revents);
+    };
+    virtual void timerEvent(EventLoop *loop, int id)
+    {
+        printf("Timer event! %d\n", id);
+    };
+    virtual void signalEvent(EventLoop *loop, int signum)
+    {
+        printf("Signal event! %d\n", signum);
+    };
 };
 
 class EventLoop : Logger
@@ -143,3 +155,5 @@ class EventLoop : Logger
      */
     int loop(struct timespec *ts);
 };
+
+#endif
