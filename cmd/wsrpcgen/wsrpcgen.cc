@@ -1,7 +1,7 @@
 
 #include <cassert>
 #include <fstream>
-#include <getopt.h>
+#include <unistd.h>
 
 #include "wsrpcgen.hh"
 

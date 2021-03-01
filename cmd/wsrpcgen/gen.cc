@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "eci/CxxUtil.hh"
 #include "wsrpcgen.hh"
 
 static std::string quote(std::string str)
@@ -380,7 +381,7 @@ void EnumDef::genDeserImpl(OutStream &os)
 
 std::string Method::implFunName(int ver)
 {
-    return name + "_v" + std::to_string(ver);
+    return name + "_v" + toStr(ver);
 }
 
 void Method::genClientCallDecl(OutStream &os, int ver, std::string prefix)

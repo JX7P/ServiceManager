@@ -7,3 +7,6 @@
 [submodule "vendor/libkqueue"]
 	path = vendor/libkqueue
 	url = ../../eComCloud/libkqueue
+[submodule "vendor/sqlite"]
+	path = vendor/sqlite
+	url = https://github.com/azadkuh/sqlite-amalgamation.git

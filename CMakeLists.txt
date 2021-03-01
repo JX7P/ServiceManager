@@ -61,18 +61,20 @@ elseif(APPLE)
   set(OSX TRUE)
 endif()
 
-
 macro(FIfUnset flag enable)
     if(NOT DEFINED ${flag})
         set(${flag} ${enable})
     endif()
 endmacro(FIfUnset)
 
+find_package(Threads REQUIRED)
+
 FIfUnset(ECI_BUILD_MANUAL TRUE)
 FIfUnset(ECI_ENABLE_TVISION FALSE)
 FIfUnset(ECI_SD_NOTIFY_TYPE "datagram")
 
 add_subdirectory(vendor/libucl)
+add_subdirectory(vendor/lemon)
 if(ECI_ENABLE_TVISION)
 add_subdirectory(vendor/tvision)
 endif()
@@ -84,6 +86,7 @@ endif()
 add_subdirectory(lib/eci)
 add_subdirectory(lib/eci-daemon)
 
+add_subdirectory(cmd/wsrpcgen)
 add_subdirectory(cmd/manager)
 
 function(FShow name flag)

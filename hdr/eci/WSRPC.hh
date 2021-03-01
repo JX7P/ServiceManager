@@ -121,8 +121,6 @@ class WSRPCVTable
 
     void invalidParams(WSRPCReq *req);
 
-    // virtual int handleReq(WSRPCReq *req) = 0;
-
   public:
 };
 

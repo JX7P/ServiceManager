@@ -4,16 +4,17 @@
  */
 
 %include {
-    #include <cstdlib>
+	#include <cstdlib>
 	#include <iostream>
 	#include <fstream>
 	#include <list>
 
-    #include "wsrpcgen.hh"
+	#include "eci/CxxUtil.hh"
+	#include "wsrpcgen.hh"
 	#include "wsrpcgen.tab.h"
 	#include "wsrpcgen.l.h"
 
-    #define LEMON_SUPER MVST_Parser
+	#define LEMON_SUPER MVST_Parser
 }
 
 %token_type    {Token}
@@ -80,8 +81,8 @@ Position MVST_Parser::pos()
 	std::string eLine = fText.substr(m_pos, eolPos - m_pos);
 	size_t i;
 
-	std::cerr << "WSRPCGen: " << fName << "(" << std::to_string(m_line) + "," 
-			  << std::to_string(m_col) << "): "
+	std::cerr << "WSRPCGen: " << fName << "(" << toStr(m_line) + "," 
+			  << toStr(m_col) << "): "
 			  << "Syntax error: unexpected " 
 			  << yyTokenName[yymajor] << "\n";
 
@@ -222,12 +223,12 @@ enum_entry(E) ::= IDENT(id) LBRACKET STRLIT(s) RBRACKET. {
 }
 enum_entry(E) ::= IDENT(id) EQUALS INTEGER(i). {
 	E.id = id.stringValue;
-	E.iVal = std::to_string(i.intValue); 
+	E.iVal = toStr(i.intValue); 
 }
 enum_entry(E) ::= IDENT(id) LBRACKET STRLIT(s) RBRACKET EQUALS INTEGER(i). {
 	E.id = id.stringValue;
 	E.str = s.stringValue;
-	E.iVal = std::to_string(i.intValue); 
+	E.iVal = toStr(i.intValue); 
 }
 
 versions(L) ::= version(d) SEMI. { L.push_back(d); }
