@@ -19,24 +19,22 @@ included with this software
 #include <cstdio>
 #include <unistd.h>
 
+#include "Backend.hh"
 #include "Manager.hh"
 #include "eci/Event.hh"
 
 Manager gMgr;
 
-void Manager::die(const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    logi(kErr, NULL, fmt, args);
-    exit(EXIT_FAILURE);
-    va_end(args);
-}
-
 void Manager::init(int argc, char *argv[])
 {
     int r = 0;
     char c;
+    bool systemMode = false;
+    bool readOnly = false;
+    /* backend settings */
+    const char *pathPersistentDb = NULL;
+    const char *pathVolatileDb = NULL;
+    bool recreatePersistentDb = false;
 
 #define SetIf(condition)                                                       \
     if (condition == -1)                                                       \
@@ -51,24 +49,36 @@ void Manager::init(int argc, char *argv[])
         die("Failed to initialise runloop.\n");
 
     /**
+     * -c: delete any existing database at the given persistent DB path, and
+     * create a new one instead. Do not try to start any targets. Used to create
+     * a seed repository.
+     * -o: start ready, only try to go into read-write mode if later requested
      * -p <path>: permanent db path
-     * -n <path>: volatile db path
+     * -q <path>: volatile db path
      * -r: try reattachment (if not, any volatile DB at given path is deleted
      * and recreated)
-     * -o: start in read-only mode (wait for sys:/runlevel/)
+     * -s: system mode (start readonly - try to open read-write later. UNLESS
+     * also reattaching - then we assume read-write unless directed otherwise)
      */
 
-    while ((c = getopt(argc, argv, "p:n:r")) != -1)
+    while ((c = getopt(argc, argv, "cp:q:rs")) != -1)
         switch (c)
         {
-        case p:
-            persistentDbPath = optarg;
+        case 'c':
+            recreatePersistentDb = true;
             break;
-        case n:
-            volatileDbPath = optarg;
+        case 'p':
+            pathPersistentDb = optarg;
+            break;
+        case 'q':
+            pathVolatileDb = optarg;
             break;
         case 'r':
-            reattach = true;
+            reattaching = true;
+            break;
+        case 's':
+            systemMode = true;
+            readOnly = true;
             break;
         case '?':
             if (optopt == 'o')
@@ -77,10 +87,23 @@ void Manager::init(int argc, char *argv[])
                 fprintf(stderr, "Unknown option `-%c'.\n", optopt);
             else
                 fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
-            return 1;
+            exit(EXIT_FAILURE);
         default:
             abort();
         }
+
+    if (!pathPersistentDb)
+        die("No path given for persistent repository.\n");
+    if (!pathVolatileDb && reattaching)
+        die("Asked to reattach, but no path given for volatile repository.\n");
+    if (!pathVolatileDb && !readOnly)
+        die("No path given for volatile repository.\n");
+
+    if (systemMode)
+        readOnly = true;
+
+    bend.init(pathPersistentDb, pathVolatileDb, readOnly, recreatePersistentDb,
+              reattaching);
 }
 
 void Manager::run()

@@ -1,4 +1,8 @@
-add_executable(sys.manager Manager.cc ${PROJECT_SOURCE_DIR}/vendor/sqlite/sqlite3.c)
+MakeHeader(${SHARESRC}/repository_schema.sql
+  repository_schema.sql.h)
+add_executable(sys.manager Backend.cc Manager.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/repository_schema.sql.h
+  ${VENDORSRC}/sqlite/sqlite3.c)
 target_include_directories(sys.manager
   PRIVATE
     ${PROEJCT_SOURCE_DIR}/vendor/sqlite)

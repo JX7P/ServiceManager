@@ -33,7 +33,7 @@ included with this software
 Logger::Logger(const char *subsysName, Logger *parent)
 {
     if (parent)
-        subsys = parent->subsys + subsysName;
+        subsys = parent->subsys + "/" + subsysName;
     else
         subsys = subsysName;
 }
@@ -47,6 +47,8 @@ void Logger::printPrefix(LogLevel level, const char *optExtra)
 
     if (level == kErr)
         pfx = KRED "ERROR: " KNRM;
+    else if (level == kFatal)
+        pfx = KRED "FATAL ERROR: " KNRM;
     else if (level == kWarn)
         pfx = KYEL "WARNING: " KNRM;
 
@@ -102,4 +104,25 @@ void Logger::ilog(LogLevel level, const char *extra, const char *fmt, ...)
     va_start(args, fmt);
     logi(level, extra, fmt, args);
     va_end(args);
+}
+
+void Logger::die(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    printPrefix(kFatal);
+    vprintf(fmt, args);
+    va_end(args);
+    exit(EXIT_FAILURE);
+}
+
+void Logger::edie(int eNo, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    printPrefix(kFatal);
+    vprintf(fmt, args);
+    printf(": %s\n", strerror(eNo));
+    va_end(args);
+    exit(EXIT_FAILURE);
 }

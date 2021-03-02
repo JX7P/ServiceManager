@@ -15,6 +15,9 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#ifndef LOGGER_HH__
+#define LOGGER_HH__
+
 #include <cstdarg>
 #include <list>
 #include <string>
@@ -31,7 +34,8 @@ class Logger
         kDebug,
         kInfo,
         kWarn,
-        kErr
+        kErr,
+        kFatal
     };
 
   protected:
@@ -53,4 +57,11 @@ class Logger
     void loge(LogLevel level, int eNo, const char *fmt, ...);
     /* Log a line with an optional extra string. */
     void ilog(LogLevel level, const char *extra, const char *fmt, ...);
+    /* Log a fatal err and exit with EXIT_FAILURE. */
+    void die(const char *fmt, ...);
+    /* Log a fatal error appending a colon followed by (": %s\n", strError(eNo))
+     * then exit with EXIT_FAILURE. */
+    void edie(int eNo, const char *fmt, ...);
 };
+
+#endif

@@ -9,5 +9,5 @@ add_library (eci-daemon alt-sd-daemon.c)
 endif()
 
 target_include_directories (eci-daemon PUBLIC
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
+    $<BUILD_INTERFACE:${HDR}>)
 target_link_libraries (eci-daemon eci-core)

@@ -9,5 +9,5 @@ string(REPLACE "\\" "\\\\" TEXT "${TEXT}")
 string(REPLACE "\"" "\\\"" TEXT "${TEXT}")
 string(REPLACE "\n" "\\n\"\n\"" TEXT "${TEXT}")
 
-set(CODE "#pragma once\nstatic const char * ${NAME} = \"${TEXT}\"\;\n")
+set(CODE "#pragma once\nstatic const char * k${NAME} = \"${TEXT}\"\;\n")
 file(WRITE ${CMAKE_ARGV4} ${CODE})

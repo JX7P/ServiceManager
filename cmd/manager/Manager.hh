@@ -20,6 +20,7 @@ included with this software
 
 #include <list>
 
+#include "Backend.hh"
 #include "eci/Event.hh"
 
 class Object
@@ -85,51 +86,38 @@ struct Transaction
 {
 };
 
-class Manager : Handler, Logger
+class Manager : public Handler, public Logger
 {
     EventLoop loop;
-
-    /**
-     * The path to the persistent repository database. This is always required.
-     * If -c is passed, then this will be created if it does not already exist
-     * (and the manager will enter Initial Repository Configuration Mode).
-     */
-    const char *persistentDbPath = NULL;
-    /**
-     * Path to the volatile repository database. If this is NULL, we simply keep
-     * the volatile database in-memory only.
-     */
-    const char *volatileDbPath = NULL;
+    Backend bend;
 
     /**
      * Whether we are trying to reattach to an extant session. This would
      * involve trying to attach to an existing volatile repository on-disk,
-     * re-establishing connections with delegates, etc.
+     * re-establishing connections with delegates, etc. Otherwise we simply
+     * delete the volatile repository and create a new one.
      */
     bool reattaching = false;
 
     /**
-     * Whether are in a read-only mode. A post-start command of
-     * service$filesystem/root may cause us to enter read-write mode.
-     */
-    bool readOnly = false;
-
-    /**
      * Whether we are in System mode. System mode is a two-step affair:
      *
-     * - we first boot to runlevel$early-init, which will typically bring the
-     * root filesystem into read/write mode and run a manifest import. Thus
-     * newly-added services may be added to the repository and only very basic
-     * system initialisation services will not be updated.
+     * - we first boot (with backend started in read-only mode) to
+     * runlevel$early-init, which will typically bring the root filesystem into
+     * read/write mode and run a manifest import. Thus newly-added services may
+     * be added to the repository and only very basic system initialisation
+     * services will not be updated.
      *
      * - only after runlevel$early-init has come up do we then target
      * runlevel$default.
      */
+    bool systemMode = false;
 
-    void die(const char *fmt, ...);
+    /** Initialise the backend. */
+    void backendInit();
 
   public:
-    Manager() : Logger("mgr"){};
+    Manager() : Logger("mgr"), bend(this){};
 
     void init(int argc, char *argv[]);
     void run();

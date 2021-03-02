@@ -4,7 +4,7 @@ configure_file (${HDR}/eci/Platform.h.in
 add_library (eci-core Core.c)
 target_include_directories (eci-core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/hdr>)
+    $<BUILD_INTERFACE:${HDR}>)
 
 add_library (eci Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc)
 target_link_libraries (eci eci-core ucl)
