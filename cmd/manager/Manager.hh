@@ -85,10 +85,53 @@ struct Transaction
 {
 };
 
-class Manager : Handler
+class Manager : Handler, Logger
 {
+    EventLoop loop;
+
+    /**
+     * The path to the persistent repository database. This is always required.
+     * If -c is passed, then this will be created if it does not already exist
+     * (and the manager will enter Initial Repository Configuration Mode).
+     */
+    const char *persistentDbPath = NULL;
+    /**
+     * Path to the volatile repository database. If this is NULL, we simply keep
+     * the volatile database in-memory only.
+     */
+    const char *volatileDbPath = NULL;
+
+    /**
+     * Whether we are trying to reattach to an extant session. This would
+     * involve trying to attach to an existing volatile repository on-disk,
+     * re-establishing connections with delegates, etc.
+     */
+    bool reattaching = false;
+
+    /**
+     * Whether are in a read-only mode. A post-start command of
+     * service$filesystem/root may cause us to enter read-write mode.
+     */
+    bool readOnly = false;
+
+    /**
+     * Whether we are in System mode. System mode is a two-step affair:
+     *
+     * - we first boot to runlevel$early-init, which will typically bring the
+     * root filesystem into read/write mode and run a manifest import. Thus
+     * newly-added services may be added to the repository and only very basic
+     * system initialisation services will not be updated.
+     *
+     * - only after runlevel$early-init has come up do we then target
+     * runlevel$default.
+     */
+
+    void die(const char *fmt, ...);
+
   public:
-    void init();
+    Manager() : Logger("mgr"){};
+
+    void init(int argc, char *argv[]);
     void run();
 };
 
