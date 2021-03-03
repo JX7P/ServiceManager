@@ -32,6 +32,11 @@ class Backend : public Logger
 
     Manager *mgr;
 
+    /**
+     * Path to the persistent repository - we need it so that, should we
+     * transition from or to read-only mode, we can reopen the repository
+     * connection.
+     */
     const char *pathPersistentDb;
     /**
      * Path to the volatile repository. If this is NULL, we simply keep the
@@ -42,6 +47,16 @@ class Backend : public Logger
     const char *pathVolatileDb = NULL;
 
     bool readOnly = false;
+
+    /** Initialises the metadata table. The table must be empty. -1 on fail. */
+    int metadataInit(sqlite3 *conn);
+    /** Validates the Metadata table, returning the version. -1 on fail. */
+    int metadataValidate(sqlite3 *conn);
+    /** Set the schema version in the Metadata table. -1 on fail. */
+    int metadataSetVersion(sqlite3 *conn);
+
+    /** Initialise a new repository with the given schema. -1 on fail. */
+    int repositoryInit(sqlite3 *conn, const char *schema);
 
   public:
     Backend(Manager *mgr);

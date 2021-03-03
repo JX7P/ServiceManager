@@ -29,9 +29,7 @@ included with this software
 
 typedef timer_t TimerDesc;
 #elif defined(ECI_EVENT_DRIVER_EPoll)
-#warning EPoll Driver
 #elif defined(ECI_EVENT_DRIVER_KQueue)
-
 typedef int TimerDesc;
 #endif
 
@@ -57,16 +55,13 @@ class Handler
 class EventLoop : Logger
 {
 #if defined(ECI_EVENT_DRIVER_Poll)
-#warning Poll driver
     int nPFDs;
     struct pollfd *pFDs;
 
     static void sigHandler(int signum, siginfo_t *siginfo, void *ctx);
 #elif defined(ECI_EVENT_DRIVER_EPoll)
-#warning EPoll Driver
     int epollFD;
 #elif defined(ECI_EVENT_DRIVER_KQueue)
-#warning KQueue
     int kqFD;
 #endif
 

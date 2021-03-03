@@ -13,3 +13,6 @@ IncludeCategories:
    Priority: 1
    SortPriority: 2
 SortIncludes: true
+
+PenaltyBreakAssignment: 6
+PenaltyBreakBeforeFirstCallParameter: 24

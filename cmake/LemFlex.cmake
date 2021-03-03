@@ -38,7 +38,6 @@ add_custom_command(
 endfunction(LemonComp)
 
 function(LemonCXXComp path)
-message("OUT  ${CMAKE_CURRENT_SOURCE_DIR}/${path} ")
 GET_FILENAME_COMPONENT(file ${path} NAME_WE)
 add_custom_command(
     OUTPUT ${file}.tab.cxx ${file}.tab.h ${file}.out

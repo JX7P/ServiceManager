@@ -24,6 +24,9 @@ extern "C"
 {
 #endif
 
+#define MQuote(name) #name
+#define MStr(macro) MQuote(macro)
+
     typedef struct ECIPendingProcess
     {
         int fd[2];
