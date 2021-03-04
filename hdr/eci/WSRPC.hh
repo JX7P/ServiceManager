@@ -144,8 +144,6 @@ class WSRPCTransport
     friend struct WSRPCServiceProvider;
     friend class WSRPCClient;
 
-    int fd = -1;
-
     /**
      * Services we handle. Not necessarily present for clients. Not owned by us;
      * the WSRPCListener (or whoever added services to a client) owns the list.
@@ -197,6 +195,8 @@ class WSRPCTransport
     void sendReply(int id, ucl_object_t *obj);
 
   public:
+    int fd = -1;
+
     /**
      * The "client" constructor - use when a transport is to serve as a client
      * to a server.
@@ -232,14 +232,19 @@ class WSRPCTransport
                                  bool attachCompletion = true);
 };
 
+struct WSRPCListenerDelegate
+{
+    /** Client connection callback - listen for events on xprt's fd. */
+    virtual void clientConnected(WSRPCTransport *xprt) = 0;
+    /** Client disconnect callback - stop listening for events on xprt's fd. */
+    virtual void clientDisconnected(WSRPCTransport *xprt) = 0;
+};
+
 class WSRPCListener
 {
   public:
-    typedef void (*FnClientDc)(void *userData, WSRPCTransport *xprt);
-
   protected:
     int fd = -1;
-    int kq = -1;
 
     /**
      * Our list of services. The WSRPCService* members of the providers are not
@@ -250,23 +255,17 @@ class WSRPCListener
     /* Our client transports. They keep pointers to our svcs list. */
     std::list<WSRPCTransport> clientXprts;
 
-    FnClientDc cbClientDc = NULL;
-    void *userDataForCb = NULL;
+    WSRPCListenerDelegate *delegate;
 
   public:
+    WSRPCListener(WSRPCListenerDelegate *delegate) : delegate(delegate){};
+
     /* Attach to a given listening socket. */
     void attach(int fd);
 
     /* Add a service to the set handled by this listener.  */
     void addService(WSRPCServiceProvider svc);
 
-    /**
-     * Set a client disconnection callback. When a client disconnects, the given
-     * function is called with the userData given and the pointer to the
-     * transport that disconnected.
-     */
-    void setClientDisconnectCallback(FnClientDc fun, void *userData);
-
-    /* Call when the FD becomes ready for reading. */
-    void readyForRead();
+    /* Call when an event occurs on an FD which may relate to the listener. */
+    void fdEvent(int fd, int revents);
 };

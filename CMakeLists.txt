@@ -89,8 +89,7 @@ endif()
 add_subdirectory(lib/eci)
 add_subdirectory(lib/eci-daemon)
 
-add_subdirectory(cmd/wsrpcgen)
-add_subdirectory(cmd/manager)
+add_subdirectory(cmd)
 
 function(FShow name flag)
         message("  ${name}: ${${flag}}")

@@ -135,9 +135,11 @@ void Manager::init(int argc, char *argv[])
     if (listen(listenFD, 10) == -1)
         edie(errno, "Failed to listen on listener socket");
 
-    r = loop.addFD(this, listenFD, POLLIN);
+    r = loop.addFD(this, listenFD, POLLIN | POLLHUP);
     if (r != 0)
         edie(-r, "Failed to add listener socket to the event loop");
+
+    listener.attach(listenFD);
 
     bend.init(pathPersistentDb, pathVolatileDb, readOnly, recreatePersistentDb,
               reattaching);
@@ -148,7 +150,14 @@ void Manager::run()
     while (shouldRun)
     {
         loop.loop(NULL);
+        usleep(10000);
     }
+}
+
+void Manager::fdEvent(EventLoop *loop, int fd, int revents)
+{
+    printf("FD Event: %d %d\n", fd, revents);
+    listener.fdEvent(fd, revents);
 }
 
 void Manager::signalEvent(EventLoop *loop, int signum)
@@ -157,6 +166,23 @@ void Manager::signalEvent(EventLoop *loop, int signum)
         shouldRun = false;
     else
         printf("Got signal %d\n", signum);
+}
+
+void Manager::clientConnected(WSRPCTransport *xprt)
+{
+    int r = loop.addFD(this, xprt->fd, POLLIN | POLLHUP);
+    if (r != 0)
+        loge(kErr, -r, "Failed to add event source for new client FD %d",
+             xprt->fd);
+}
+
+void Manager::clientDisconnected(WSRPCTransport *xprt)
+{
+    int r = loop.delFD(xprt->fd);
+    if (r != 0)
+        loge(kErr, -r,
+             "Failed to delete event source for disconnected client FD %d\n",
+             xprt->fd);
 }
 
 int main(int argc, char *argv[])

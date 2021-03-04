@@ -88,7 +88,10 @@ struct Transaction
 {
 };
 
-class Manager : public Handler, public Logger, io_eComCloud_eci_IManagerVTable
+class Manager : public Handler,
+                public Logger,
+                io_eComCloud_eci_IManagerVTable,
+                WSRPCListenerDelegate
 {
     EventLoop loop;
     Backend bend;
@@ -124,7 +127,7 @@ class Manager : public Handler, public Logger, io_eComCloud_eci_IManagerVTable
     void backendInit();
 
   public:
-    Manager() : Logger("mgr"), bend(this){};
+    Manager() : Logger("mgr"), bend(this), listener(this){};
 
     void init(int argc, char *argv[]);
     void run();
@@ -134,7 +137,12 @@ class Manager : public Handler, public Logger, io_eComCloud_eci_IManagerVTable
     bool subscribe_v1(WSRPCReq *req);
 
     /* event handlers */
+    void fdEvent(EventLoop *loop, int fd, int revents);
     void signalEvent(EventLoop *loop, int signum);
+
+    /* WSRPC delegate methods */
+    void clientConnected(WSRPCTransport *xprt);
+    void clientDisconnected(WSRPCTransport *xprt);
 };
 
 extern Manager gMgr;

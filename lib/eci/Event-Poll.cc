@@ -212,9 +212,10 @@ int EventLoop::delFD(int fd)
         if (pFDs[i].fd == fd)
         {
             memmove(&pFDs[i], &pFDs[i + 1], sizeof(*pFDs) * (nPFDs - i));
-            pFDs--;
+            nPFDs--;
             return 0;
         }
+
     return -ENOENT;
 }
 

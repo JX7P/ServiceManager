@@ -1,18 +1,18 @@
 /*******************************************************************
 
-        PROPRIETARY NOTICE
+    PROPRIETARY NOTICE
 
 These coded instructions, statements, and computer programs contain
-proprietary  information  of eComCloud Object Solutions, and are protected
-under  copyright law.  They may not be distributed, copied, or used
-except  under  the  provisions of the terms of the End-User License
-Agreement,  in the file  "EULA.md", which should have been included
-with this file.
+proprietary information of eComCloud Object Solutions, and they are
+protected under copyright law. They may not be distributed, copied,
+or used except under the provisions of the terms of the Source Code
+Licence Agreement, in the file "LICENCE.md", which should have been
+included with this software
 
-        Copyright Notice
+    Copyright Notice
 
-    (c) 2021 eComCloud Object Solutions.
-            All rights reserved.
+    (c) 2020-2021 eComCloud Object Solutions.
+        All rights reserved.
 ********************************************************************/
 
 #include <sys/types.h>
@@ -506,48 +506,40 @@ void WSRPCListener::addService(WSRPCServiceProvider svc)
     svcs.push_back(svc);
 }
 
-void WSRPCListener::setClientDisconnectCallback(FnClientDc fun, void *userData)
+void WSRPCListener::fdEvent(int aFD, int revents)
 {
-    cbClientDc = fun;
-    userDataForCb = userData;
-}
-
-/*void WSRPCListener::handleKEvent(struct kevent *ev)
-{
-    struct kevent nev;
-
     // we will check with all our clients too, for they may be getting their own
-     // Requests, or indeed their own Responses.
-    if (ev->flags & EV_EOF)
+    // Requests, or indeed their own Responses.
+    if (revents & POLLHUP)
     {
         for (auto it = clientXprts.begin(); it != clientXprts.end(); it++)
-            if (it->fd == ev->ident)
+            if (it->fd == aFD)
             {
-                printf("Dropping client %d\n", ev->ident);
-                if (cbClientDc)
-                    cbClientDc(userDataForCb, &*it);
+                printf("Dropping client %d\n", aFD);
+                delegate->clientDisconnected(&*it);
                 clientXprts.erase(it);
-                EV_SET(&nev, ev->ident, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-                if (kevent(kq, &nev, 1, NULL, 0, NULL) == -1)
-                    perror("kevent");
-                close(ev->ident);
+                close(aFD);
                 break;
             }
     }
-    else if (ev->ident == fd)
+    else if (aFD == fd)
     {
-        int clFd = accept(ev->ident, NULL, NULL);
+        int clFd = accept(aFD, NULL, NULL);
         printf("Accept client %d\n", clFd);
 
         if (clFd == -1)
-            err(1, "accept");
-        clientXprts.emplace_back(std::move(WSRPCTransport(kq, clFd, &svcs)));
+        {
+            printf("Error accepting client: %s\n", strerror(errno));
+            return;
+        }
+
+        clientXprts.emplace_back(std::move(WSRPCTransport(clFd, &svcs)));
+        delegate->clientConnected(&clientXprts.back());
     }
-    else if (ev->filter == EVFILT_READ)
+    else if (revents & POLLIN)
     {
-        int fd = ev->ident;
         for (auto it = clientXprts.begin(); it != clientXprts.end(); it++)
-            if (it->fd == ev->ident)
+            if (it->fd == aFD)
                 it->readyForRead();
     }
-}*/
+}
