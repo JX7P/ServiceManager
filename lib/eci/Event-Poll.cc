@@ -103,7 +103,7 @@ int EventLoop::addSignal(Handler *handler, int sigNum)
     }
     catch (std::bad_alloc)
     {
-        loge(kErr, ENOMEM, "Failed to allocate FD source descriptor");
+        loge(kErr, ENOMEM, "Failed to allocate signal source descriptor");
         nPFDs--;
         return -ENOMEM;
     }
@@ -112,7 +112,7 @@ int EventLoop::addSignal(Handler *handler, int sigNum)
     sigemptyset(&sigact.sa_mask);
     sigact.sa_flags = SA_SIGINFO | SA_RESTART;
 
-    r = sigaction(SIGALRM, &sigact, (struct sigaction *)NULL);
+    r = sigaction(sigNum, &sigact, (struct sigaction *)NULL);
 
     if (r == -1)
     {

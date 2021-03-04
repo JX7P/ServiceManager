@@ -145,7 +145,6 @@ class WSRPCTransport
     friend class WSRPCClient;
 
     int fd = -1;
-    int kq = -1;
 
     /**
      * Services we handle. Not necessarily present for clients. Not owned by us;
@@ -181,12 +180,14 @@ class WSRPCTransport
 
   protected:
     /* Creates a WSRPCTransport that doesn't own its svcs list. */
-    WSRPCTransport(int kq, int fd, std::list<WSRPCServiceProvider> *);
+    WSRPCTransport(int fd, std::list<WSRPCServiceProvider> *);
 
-    /* Awaits a reply for the given completion, up to /timeoutMsecs
+    /**
+     * Synchronously waits a reply for the given completion, up to /timeoutMsecs
      * milliseconds. Returns true if such a reply arrives. Completion is
      * correspondingly completed. Any other messages received are appropriately
-     * queued for dispatch afterwards. */
+     * queued for dispatch afterwards.
+     */
     bool awaitReply(WSRPCCompletion *comp, int timeoutMsecs);
 
     /* Send an object.. */
@@ -197,18 +198,22 @@ class WSRPCTransport
 
   public:
     /**
-     * Constructs a WSRPCTransport to be used for connecting as a client to a
-     * server.
-     * It creates its own svcs() which it owns. */
+     * The "client" constructor - use when a transport is to serve as a client
+     * to a server.
+     *
+     * It creates its own svcs list, which it owns.
+     */
     WSRPCTransport() : ownSvcs(true)
     {
         svcs = new std::list<WSRPCServiceProvider>;
     };
     ~WSRPCTransport();
 
-    void attach(int kq, int fd);
+    /**
+     * Attach a transport to an existing socket.
+     */
+    void attach(int fd);
 
-    void handleKEvent(struct kevent *ev);
     /* Notify transport that its FD is ready for reading. */
     void readyForRead();
 
@@ -250,9 +255,9 @@ class WSRPCListener
 
   public:
     /* Attach to a given listening socket. */
-    void attach(int kq, int fd);
+    void attach(int fd);
 
-    /* Add a service to the set handled by this listener. */
+    /* Add a service to the set handled by this listener.  */
     void addService(WSRPCServiceProvider svc);
 
     /**
@@ -262,5 +267,6 @@ class WSRPCListener
      */
     void setClientDisconnectCallback(FnClientDc fun, void *userData);
 
-    void handleKEvent(struct kevent *ev);
+    /* Call when the FD becomes ready for reading. */
+    void readyForRead();
 };

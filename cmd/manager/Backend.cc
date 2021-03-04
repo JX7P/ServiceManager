@@ -54,57 +54,6 @@ static int eciVASPrintF(char **out, const char *fmt, va_list args)
     return vsprintf(*out, fmt, args);
 }
 
-int sqlite3_execf(sqlite3 *conn, /* An open database */
-                  int (*callBack)(void *, int, char **,
-                                  char **), /* Callback function */
-                  void *arg,                /* 1st argument to callback */
-                  char **errMsg,            /* Error msg written here */
-                  const char *fmtSql, /*  SQL format string to be evaluated */
-                  ...                 /* Variadic arguments */
-)
-{
-    char *buf = NULL;
-    int res;
-    va_list args;
-
-    va_start(args, fmtSql);
-
-    if (eciVASPrintF(&buf, fmtSql, args) == -1)
-        return SQLITE_NOMEM;
-    res = sqlite3_exec(conn, buf, callBack, arg, errMsg);
-
-    free(buf);
-    va_end(args);
-    return res;
-}
-
-static int cbExecGetSingleInt(void *udp, int nCols, char **colVals,
-                              char **colNames)
-{
-    ExecGetSingleIntContext *ctx = (ExecGetSingleIntContext *)udp;
-    uint32_t val;
-    char *endPtr = colVals[0];
-
-    assert(nCols == 1);
-
-    if (colVals[0] == NULL)
-        return 0;
-
-    errno = 0;
-    ctx->value = strtol(colVals[0], &endPtr, 10);
-    if (colVals[0] == endPtr)
-        goto bad;
-    else if (errno != 0)
-        goto bad;
-
-    ctx->result = SQLITE_OK;
-    return 0;
-
-bad:
-    ctx->result = EBADF;
-    return -1;
-}
-
 Backend::Backend(Manager *mgr) : mgr(mgr), Logger("db-backend", mgr)
 {
     log(kInfo, "repository server backed by SQLite version %s\n",
@@ -121,25 +70,17 @@ int Backend::metadataInit(sqlite3 *conn)
 
 int Backend::metadataValidate(sqlite3 *conn)
 {
-    ExecGetSingleIntContext ctx;
     int res;
+    int ver;
 
-    res = sqlite3_exec(conn, "SELECT Version FROM Metadata;",
-                       cbExecGetSingleInt, &ctx, NULL);
+    res = txGetSingleInt(conn, "SELECT Version FROM Metadata;", &ver);
     if (res != SQLITE_OK)
     {
         log(kErr, "Failed to get version from the metadata table: %s\n",
             sqlite3_errmsg(conn));
         return -1;
     }
-
-    if (ctx.result != SQLITE_OK)
-    {
-        loge(kErr, ctx.result, "Failed to get version from the metadata table");
-        return -1;
-    }
-
-    return ctx.value;
+    return ver;
 }
 
 int Backend::metadataSetVersion(sqlite3 *conn)
@@ -153,6 +94,33 @@ int Backend::repositoryInit(sqlite3 *conn, const char *schema)
         return res;
 
     res = metadataInit(conn);
+    return res;
+}
+
+int Backend::txGetSingleInt(sqlite3 *conn, const char *query, int *out)
+{
+    sqlite3_stmt *stmt;
+    int res = sqlite3_prepare_v2(conn, query, -1, &stmt, 0);
+
+    if (res != SQLITE_OK)
+    {
+        log(kErr, "Failed to prepare transaction: %s\n", sqlite3_errmsg(conn));
+        return res;
+    }
+
+    res = sqlite3_step(stmt);
+
+    if (res == SQLITE_ROW)
+    {
+        *out = sqlite3_column_int(stmt, 0);
+        res = SQLITE_OK;
+    }
+    else if (res == SQLITE_DONE)
+    {
+        log(kWarn, "no value returned by query %s\n", query);
+    }
+
+    sqlite3_finalize(stmt);
     return res;
 }
 

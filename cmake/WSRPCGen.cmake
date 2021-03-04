@@ -1,18 +1,19 @@
 function(WSRPCGen)
-    set(options "")
-    set(oneValueArgs INPUT)
-    set(oneValueArgs OUTPUT)
-    set(multiValueArgs INCLUDE_DIRECTORIES WHATEVER)
     set(wsrpcgen $<TARGET_FILE:wsrpcgen>)
-    cmake_parse_arguments(WS "${options}" "${oneValueArgs}"
-                      "${multiValueArgs}" ${ARGN} )
+    cmake_parse_arguments(
+        WS
+        "${options}"
+        "INPUT;OUTPUT"
+        "$INCLUDE_DIRECTORIES"
+        ${ARGN})
 
-    set(file ${OUTPUT})
     get_filename_component(dir ${WS_INPUT} DIRECTORY)
-    set(hdr ${CMAKE_CURRENT_BINARY_DIR}/${file}.hh)
-    set(svc ${CMAKE_CURRENT_BINARY_DIR}/${file}_svc.cc)
-    set(clnt ${CMAKE_CURRENT_BINARY_DIR}/${file}_clnt.cc)
-    set(conv ${CMAKE_CURRENT_BINARY_DIR}/${file}_conv.cc)
+    set(hdr ${WS_OUTPUT}.hh)
+    set(svc ${WS_OUTPUT}_svc.cc)
+    set(clnt ${WS_OUTPUT}_clnt.cc)
+    set(conv ${WS_OUTPUT}_conv.cc)
+
+    message("OutH: ${hdr}")
 
     list(APPEND incDirFlags)
     foreach(incDir_in ${WS_INCLUDE_DIRECTORIES})
@@ -23,7 +24,7 @@ function(WSRPCGen)
         COMMAND rm
         ARGS -f ${hdr}
         COMMAND ${wsrpcgen}
-        ARGS ${incDirFlags} -h -o ${CMAKE_CURRENT_BINARY_DIR}/${file} ${WS_INPUT}
+        ARGS ${incDirFlags} -h -o ${WS_OUTPUT} ${WS_INPUT}
         DEPENDS ${WS_INPUT} ${wsrpcgen}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         )
@@ -31,7 +32,7 @@ function(WSRPCGen)
         COMMAND rm
         ARGS -f ${svc}
         COMMAND ${wsrpcgen}
-        ARGS ${incDirFlags} -s -o ${CMAKE_CURRENT_BINARY_DIR}/${file} ${WS_INPUT}
+        ARGS ${incDirFlags} -s -o ${WS_OUTPUT} ${WS_INPUT}
         DEPENDS ${WS_INPUT} ${wsrpcgen}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         )
@@ -39,14 +40,14 @@ function(WSRPCGen)
         COMMAND rm
         ARGS -f ${clnt}
         COMMAND ${wsrpcgen}
-        ARGS ${incDirFlags} -c -o ${CMAKE_CURRENT_BINARY_DIR}/${file} ${WS_INPUT}
+        ARGS ${incDirFlags} -c -o ${WS_OUTPUT} ${WS_INPUT}
         DEPENDS ${WS_INPUT} ${wsrpcgen}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     add_custom_command(OUTPUT ${conv}
         COMMAND rm
         ARGS -f ${conv}
         COMMAND ${wsrpcgen}
-        ARGS ${incDirFlags} -x -o ${CMAKE_CURRENT_BINARY_DIR}/${file} ${WS_INPUT}
+        ARGS ${incDirFlags} -x -o ${WS_OUTPUT} ${WS_INPUT}
         DEPENDS ${WS_INPUT} ${wsrpcgen}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endfunction(WSRPCGen)

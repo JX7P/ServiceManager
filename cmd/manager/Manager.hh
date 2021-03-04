@@ -22,6 +22,8 @@ included with this software
 
 #include "Backend.hh"
 #include "eci/Event.hh"
+#include "eci/WSRPC.hh"
+#include "io.eComCloud.eci.IManager.hh"
 
 class Object
 {
@@ -86,10 +88,15 @@ struct Transaction
 {
 };
 
-class Manager : public Handler, public Logger
+class Manager : public Handler, public Logger, io_eComCloud_eci_IManagerVTable
 {
     EventLoop loop;
     Backend bend;
+    WSRPCListener listener;
+    int listenFD;
+
+    /** Whether we should continue to run. */
+    bool shouldRun = true;
 
     /**
      * Whether we are trying to reattach to an extant session. This would
@@ -121,6 +128,13 @@ class Manager : public Handler, public Logger
 
     void init(int argc, char *argv[]);
     void run();
+
+  private:
+    /* RPC methods */
+    bool subscribe_v1(WSRPCReq *req);
+
+    /* event handlers */
+    void signalEvent(EventLoop *loop, int signum);
 };
 
 extern Manager gMgr;

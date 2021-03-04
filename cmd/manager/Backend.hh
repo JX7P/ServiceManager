@@ -58,6 +58,9 @@ class Backend : public Logger
     /** Initialise a new repository with the given schema. -1 on fail. */
     int repositoryInit(sqlite3 *conn, const char *schema);
 
+    /** Try to get a single int. -1 on failure. */
+    int txGetSingleInt(sqlite3 *conn, const char *query, int *result);
+
   public:
     Backend(Manager *mgr);
 

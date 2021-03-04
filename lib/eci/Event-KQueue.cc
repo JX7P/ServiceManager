@@ -115,6 +115,7 @@ int EventLoop::addSignal(Handler *handler, int signum)
         sigSources.pop_back();
         return -errno;
     }
+
     /**
      * On BSD, setting a signal event filter on a Kernel Queue does NOT
      * supersede ordinary signal disposition. Therefore we ignore the

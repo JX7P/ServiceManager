@@ -1,12 +1,18 @@
+WSRPCGen(
+  INPUT io.eComCloud.eci.IManager.x
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager)
+
 configure_file (${HDR}/eci/Platform.h.in
     ${CMAKE_CURRENT_BINARY_DIR}/eci/Platform.h)
 
 add_library (eci-core Core.c)
 target_include_directories (eci-core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<BUILD_INTERFACE:${HDR}>)
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+  $<BUILD_INTERFACE:${HDR}>)
 
-add_library (eci Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc)
+add_library(eci
+  Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager.hh)
 target_link_libraries (eci eci-core ucl)
 
 # installation

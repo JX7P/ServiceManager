@@ -648,7 +648,7 @@ void TrlUnit::genHeader(OutStream &os)
 {
     os.add("#pragma once\n");
     os.add(code);
-    os.add("#include \"eci/wsrpc.hh\"\n");
+    os.add("#include \"eci/WSRPC.hh\"\n");
 
     for (auto import : imports)
         os.add("#include \"" + import->hdrName() + "\"\n");

@@ -15,6 +15,8 @@ included with this software
         All rights reserved.
 ********************************************************************/
 
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <csignal>
 #include <cstdio>
 #include <unistd.h>
@@ -29,12 +31,15 @@ void Manager::init(int argc, char *argv[])
 {
     int r = 0;
     char c;
-    bool systemMode = false;
-    bool readOnly = false;
-    /* backend settings */
+    struct sockaddr_un sun;
+
+    /* settings */
     const char *pathPersistentDb = NULL;
     const char *pathVolatileDb = NULL;
+    const char *pathSocket;
     bool recreatePersistentDb = false;
+    bool readOnly = false;
+    bool systemMode = false;
 
 #define SetIf(condition)                                                       \
     if (condition == -1)                                                       \
@@ -42,8 +47,8 @@ void Manager::init(int argc, char *argv[])
 
     SetIf(loop.init());
 
-    SetIf(loop.addSignal(this, SIGHUP));
-    SetIf(loop.addSignal(this, SIGTERM));
+    SetIf(loop.addSignal(this, SIGINT));
+    SetIf(loop.addSignal(this, SIGUSR1));
 
     if (r == -1)
         die("Failed to initialise runloop.\n");
@@ -59,9 +64,10 @@ void Manager::init(int argc, char *argv[])
      * and recreated)
      * -s: system mode (start readonly - try to open read-write later. UNLESS
      * also reattaching - then we assume read-write unless directed otherwise)
+     * -t <path>: path at which to create the listener socket
      */
 
-    while ((c = getopt(argc, argv, "cp:q:rs")) != -1)
+    while ((c = getopt(argc, argv, "cp:q:rst:")) != -1)
         switch (c)
         {
         case 'c':
@@ -80,6 +86,9 @@ void Manager::init(int argc, char *argv[])
             systemMode = true;
             readOnly = true;
             break;
+        case 't':
+            pathSocket = optarg;
+            break;
         case '?':
             if (optopt == 'o')
                 fprintf(stderr, "Option -%c requires an argument.\n", optopt);
@@ -92,6 +101,8 @@ void Manager::init(int argc, char *argv[])
             abort();
         }
 
+    if (!pathSocket)
+        die("No path given for listener socket.\n");
     if (!pathPersistentDb)
         die("No path given for persistent repository.\n");
     if (!pathVolatileDb && reattaching)
@@ -102,12 +113,50 @@ void Manager::init(int argc, char *argv[])
     if (systemMode)
         readOnly = true;
 
+    /* delete any old ECID socket */
+    unlink(pathSocket);
+
+    if ((listenFD = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+        edie(errno, "Failed to create listener socket");
+
+    memset(&sun, 0, sizeof(struct sockaddr_un));
+    sun.sun_family = AF_UNIX;
+    strncpy(sun.sun_path, pathSocket, sizeof(sun.sun_path));
+
+#ifdef ECI_PLAT_HPUX
+
+    if (bind(listenFD, (struct sockaddr *)&sun, sizeof(struct sockaddr_un)) ==
+        -1)
+#else
+    if (bind(listenFD, (struct sockaddr *)&sun, SUN_LEN(&sun)) == -1)
+#endif
+        edie(errno, "Failed to bind listener socket");
+
+    if (listen(listenFD, 10) == -1)
+        edie(errno, "Failed to listen on listener socket");
+
+    r = loop.addFD(this, listenFD, POLLIN);
+    if (r != 0)
+        edie(-r, "Failed to add listener socket to the event loop");
+
     bend.init(pathPersistentDb, pathVolatileDb, readOnly, recreatePersistentDb,
               reattaching);
 }
 
 void Manager::run()
 {
+    while (shouldRun)
+    {
+        loop.loop(NULL);
+    }
+}
+
+void Manager::signalEvent(EventLoop *loop, int signum)
+{
+    if (signum == SIGINT)
+        shouldRun = false;
+    else
+        printf("Got signal %d\n", signum);
 }
 
 int main(int argc, char *argv[])
