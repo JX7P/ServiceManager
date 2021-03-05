@@ -19,11 +19,12 @@ included with this software
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "eci/Event.hh"
 #include "eci/Logger.hh"
 #include "eci/Platform.h"
 #include "io.eComCloud.eci.IManager.hh"
 
-struct LsSys : Logger
+struct LsSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
 {
     LsSys() : Logger("lssys"){};
     int main(int argc, char *argv[]);
@@ -35,6 +36,8 @@ int LsSys::main(int argc, char *argv[])
     int fd;
     struct sockaddr_un sun;
     const char *pathSockManager = NULL;
+    WSRPCTransport xprt;
+    EventLoop loop;
 
     /* -t <path>: path of the sys.manager socket */
     while ((c = getopt(argc, argv, "t:")) != -1)
@@ -65,6 +68,18 @@ int LsSys::main(int argc, char *argv[])
 #endif
         edie(errno, "Failed to connect to manager socket at %s",
              pathSockManager);
+
+    xprt.attach(fd);
+
+    loop.init();
+    loop.addFD(this, fd, POLLIN | POLLHUP);
+
+    auto comp =
+        io_eComCloud_eci_IManagerClnt::subscribe_v1_async(&xprt, this, 2);
+
+    loop.loop(NULL);
+
+    xprt.readyForRead();
 
     return fd;
 }

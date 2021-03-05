@@ -124,7 +124,6 @@ void Manager::init(int argc, char *argv[])
     strncpy(sun.sun_path, pathSocket, sizeof(sun.sun_path));
 
 #ifdef ECI_PLAT_HPUX
-
     if (bind(listenFD, (struct sockaddr *)&sun, sizeof(struct sockaddr_un)) ==
         -1)
 #else
@@ -140,6 +139,7 @@ void Manager::init(int argc, char *argv[])
         edie(-r, "Failed to add listener socket to the event loop");
 
     listener.attach(listenFD);
+    listener.addService({this, io_eComCloud_eci_IManagerVTable::handleReq});
 
     bend.init(pathPersistentDb, pathVolatileDb, readOnly, recreatePersistentDb,
               reattaching);

@@ -200,6 +200,16 @@ bool wsRPCDeserialisestring(const ucl_object_t *obj, std::string *out)
     return true;
 }
 
+WSRPCError::WSRPCError(Code code, std::string msg)
+    : errcode(code), errmsg(std::move(msg))
+{
+}
+
+WSRPCError WSRPCError::invalidParams()
+{
+    return WSRPCError(kInvalidParameters, "Invalid method parameter(s).");
+}
+
 WSRPCCompletion::WSRPCCompletion(WSRPCTransport *xprt, int id)
     : xprt(xprt), id(id)
 {
@@ -216,16 +226,21 @@ bool WSRPCCompletion::wait()
     return xprt->awaitReply(this, 2000);
 }
 
-void WSRPCVTable::invalidParams(WSRPCReq *req)
+void WSRPCCompletion::completeWith(ucl_object_t *obj)
 {
-    req->err.errcode = WSRPCError::kInvalidParameters;
-    req->err.errmsg = "Invalid method parameter(s).";
-}
-
-WSRPCCompletion *WSRPCClient::sendMsg(WSRPCTransport *xprt, std::string method,
-                                      ucl_object_t *params)
-{
-    return xprt->sendMessage(method, params, false);
+    const ucl_object_t *result_o, *error_o;
+    result_o = ucl_object_lookup(obj, "result");
+    if (result_o)
+    {
+        err.errcode = WSRPCError::kSuccess;
+        err.errmsg = "";
+        result = ucl_object_ref(result_o);
+    }
+    else
+        err = uclToError(ucl_object_lookup(obj, "error"));
+    if (delegate)
+        fnDelegateInvoker(delegate, this);
+    ucl_object_unref(obj);
 }
 
 void WSRPCTransport::sendError(int id, WSRPCError &err)
@@ -305,72 +320,60 @@ retry:
     }
     else if (pres == 0)
     {
-        printf("Did NOT receive a reply!\n");
+        fprintf(stderr, "No reply received to synchronous message.\n");
         return false;
+    }
+    else if (pollfd.revents & POLLIN)
+    {
+        int res;
+        ucl_object_t *obj;
+        bool didReceive = doRecv();
+
+        if (!didReceive)
+        {
+            /* more to be received */
+            timeoutMsecs = 0;
+            goto retry;
+        }
+
+        res = parseMessage(curMsgBuf, &obj);
+        free(curMsgBuf);
+        curMsgBuf = 0;
+
+        if (res)
+        {
+            fprintf(stderr, "Bad message received while awaiting reply.\n");
+            return -1;
+        }
+
+        int id;
+        if ((id = uclObjIsResponseForId(obj)) == comp->id)
+            comp->completeWith(obj);
+        else
+        {
+            /* An ugly hack to enable nested synchronous RPC. */
+            processMessage(obj);
+            if (received.size())
+                for (auto &obj : received)
+                    if (uclObjIsResponseForId(obj) == comp->id)
+                    {
+                        received.remove(obj);
+                        comp->completeWith(obj);
+                    }
+
+            goto retry;
+        }
+    }
+    else if (pollfd.revents & POLLHUP)
+    {
+        printf("Hangup on FD %d\n", fd);
+        ret = false;
     }
     else
     {
-        if (pollfd.revents & POLLIN)
-        {
-            int rres = doRecv();
-
-            if (rres)
-            {
-                ucl_object_t *obj;
-                int res = parseMessage(curMsgBuf, &obj);
-                free(curMsgBuf);
-                curMsgBuf = 0;
-                if (!res)
-                {
-                    int id;
-                    if ((id = uclObjIsResponseForId(obj)) == comp->id)
-                    {
-                    processResp:
-                        /* factor out? */
-                        const ucl_object_t *result_o, *error_o;
-                        result_o = ucl_object_lookup(obj, "result");
-                        if (result_o)
-                        {
-                            comp->err.errcode = WSRPCError::kSuccess;
-                            comp->err.errmsg = "";
-                            comp->result = ucl_object_ref(result_o);
-                        }
-                        else
-                        {
-                            comp->err =
-                                uclToError(ucl_object_lookup(obj, "error"));
-                        }
-                        ucl_object_unref(obj);
-                    }
-                    else
-                    {
-                        /* FIXME: This is an ugly hack to enable nested RPC.*/
-                        processMessage(obj);
-                        if (received.size())
-                        {
-                            for (auto &obj : received)
-                                if (uclObjIsResponseForId(obj) == comp->id)
-                                {
-                                    received.remove(obj);
-                                    goto processResp;
-                                }
-                        }
-                        goto retry;
-                    }
-                }
-                else
-                {
-                    timeoutMsecs = 0;
-                    goto retry;
-                }
-            }
-        }
-        else if (pollfd.revents & POLLHUP)
-        {
-            printf("Hangup on FD %d\n", fd);
-            ret = false;
-        }
+        assert(!"unreached");
     }
+
     return ret;
 }
 
@@ -410,6 +413,7 @@ void WSRPCTransport::readyForRead()
     if (doRecv())
     {
         ucl_object_t *obj;
+
         int res = parseMessage(curMsgBuf, &obj);
 
         free(curMsgBuf);
@@ -422,11 +426,15 @@ void WSRPCTransport::readyForRead()
 void WSRPCTransport::processMessage(ucl_object_t *obj)
 {
     int resp;
+
     if ((resp = uclObjIsResponseForId(obj)))
     {
-        /* TODO: add a boolean flag "should store" or something like that, only
-         * do this if necessary */
-        printf("got response to %d, enqueuing for dispatch\n", resp);
+        for (auto comp : completions)
+            if (resp == comp->id)
+            {
+                comp->completeWith(obj);
+                return;
+            }
         received.push_back((ucl_object_t *)obj);
         return;
     }
@@ -471,9 +479,9 @@ void WSRPCTransport::processMessage(ucl_object_t *obj)
     ucl_object_unref(obj);
 }
 
-WSRPCCompletion *WSRPCTransport::sendMessage(std::string method,
-                                             ucl_object_t *params,
-                                             bool attachCompletion)
+WSRPCCompletion *WSRPCTransport::sendMessage(
+    std::string method, ucl_object_t *params, void *delegate,
+    WSRPCCompletion::FnDelegateInvoker fnDelegateInvoker)
 {
     int id = rand();
     WSRPCCompletion *comp = new WSRPCCompletion(this, id);
@@ -490,8 +498,12 @@ WSRPCCompletion *WSRPCTransport::sendMessage(std::string method,
 
     ucl_object_unref(msg);
 
-    /* FIXME: implement later for async. */
-    assert(!attachCompletion);
+    assert((!delegate && !fnDelegateInvoker) || delegate && fnDelegateInvoker);
+    comp->delegate = delegate;
+    comp->fnDelegateInvoker = fnDelegateInvoker;
+
+    if (delegate)
+        completions.push_back(comp);
 
     return comp;
 }

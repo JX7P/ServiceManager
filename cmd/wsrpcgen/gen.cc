@@ -400,14 +400,24 @@ void Method::genClientCallDecl(OutStream &os, int ver, std::string prefix)
     os.cadd(")");
 }
 
-void Method::genClientCallImpl(OutStream &os, int ver, std::string prefix)
+void Method::genClientCallAsynchDecl(OutStream &os, int ver,
+                                     std::string className, std::string prefix)
 {
-    genClientCallDecl(os, ver, prefix);
-    os.cadd("\n");
-    os.add("{\n");
-    os.depth += 2;
-    os.add("WSRPCError werr;\n");
-    os.add("WSRPCCompletion * comp;\n");
+    os.add("WSRPCCompletion * " + prefix + implFunName(ver) + "_async(");
+    os.cadd("WSRPCTransport * xprt, ");
+    os.cadd(className + "Delegate* delegate");
+
+    for (auto arg : args)
+    {
+        os.cadd(", ");
+        os.cadd(arg->type->makeArg(arg->id));
+    }
+    os.cadd(")");
+}
+
+void Method::genClientCallCommonPartImpl(OutStream &os, int ver,
+                                         std::string prefix)
+{
     os.add("ucl_object_t * params = ucl_object_typed_new(UCL_OBJECT);\n");
 
     /* serialise arguments */
@@ -418,10 +428,22 @@ void Method::genClientCallImpl(OutStream &os, int ver, std::string prefix)
     for (auto arg : args)
         os.add("ucl_object_insert_key(params, u" + arg->id + ", " +
                quote(arg->id) + ", 0, false);\n");
+}
 
-    /* make the actual call */
+void Method::genClientCallImpl(OutStream &os, int ver, std::string prefix)
+{
+    genClientCallDecl(os, ver, prefix);
+    os.cadd("\n");
+    os.add("{\n");
+    os.depth += 2;
+    os.add("WSRPCError werr;\n");
+    os.add("WSRPCCompletion * comp;\n");
+
+    genClientCallCommonPartImpl(os, ver, prefix);
+
     os.add("comp = ");
-    os.cadd("sendMsg(xprt, " + quote(implFunName(ver)) + ", params);\n");
+    os.cadd("xprt->sendMessage(" + quote(implFunName(ver)) +
+            ", params, NULL, NULL);\n");
 
     os.add("if (comp->wait()) {\n");
     os.depth += 2;
@@ -449,6 +471,95 @@ void Method::genClientCallImpl(OutStream &os, int ver, std::string prefix)
     os.add("werr = comp->err;\n");
     os.add("delete comp;\n");
     os.add("return werr;\n");
+
+    os.depth -= 2;
+    os.add("}\n");
+}
+
+void Method::genClientCallAsynchImpl(OutStream &os, int ver, std::string prefix)
+{
+    std::string className(prefix.substr(0, prefix.size() - 6));
+
+    genClientCallAsynchDecl(os, ver, className, prefix);
+    os.cadd("\n");
+    os.add("{\n");
+    os.depth += 2;
+    os.add("WSRPCCompletion * comp;\n");
+
+    genClientCallCommonPartImpl(os, ver, prefix);
+
+    os.add("comp = ");
+    os.cadd("xprt->sendMessage(" + quote(implFunName(ver)) +
+            ", params, delegate, " + className +
+            "Delegate::" + implFunName(ver) + "_didReplyDispatch);\n ");
+
+    os.add("return comp;\n");
+
+    os.depth -= 2;
+    os.add("}\n");
+}
+
+void Method::genClientDelegateDecl(OutStream &os, int ver, std::string prefix)
+{
+    os.add("void " + prefix + implFunName(ver) + "_didReply(WSRPCError * err");
+    if (!retType->isVoid())
+        os.cadd(", " + retType->makeArg("retVal"));
+    os.cadd(")");
+}
+
+void Method::genClientDelegateDispatcherDecl(OutStream &os, int ver,
+                                             std::string prefix)
+{
+    os.add("void " + prefix + implFunName(ver) +
+           "_didReplyDispatch(void * _delegate, WSRPCCompletion * comp)");
+}
+
+void Method::genClientDelegateImpl(OutStream &os, int ver, std::string prefix)
+{
+    genClientDelegateDecl(os, ver, prefix);
+    os.add("\n");
+    os.add("{\n");
+    os.depth += 2;
+    os.add("fprintf(stderr, " +
+           quote("Unhandled reply to method <" + name + ">\\n") + ");\n");
+    os.depth -= 2;
+    os.add("}\n");
+}
+
+void Method::genClientDelegateDispatcherImpl(OutStream &os, int ver,
+                                             std::string prefix)
+{
+    std::string clsName(prefix.substr(0, prefix.size() - 2)); /* fix this! */
+    genClientDelegateDispatcherDecl(os, ver, prefix);
+    os.add("{\n");
+    os.depth += 2;
+    os.add(clsName + " *delegate = (" + clsName + "*) _delegate;\n");
+
+    if (!retType->isVoid())
+    {
+        os.add(retType->makeDecl("rval") + ";\n\n");
+        os.add("if(comp->result) {\n");
+        os.depth += 2;
+
+        os.add("bool suc;\n");
+        retType->genDeserialiseInto(os, "suc", "comp->result", "rval", false);
+
+        os.add("if (!suc) {\n");
+        os.depth += 2;
+        os.add(
+            "comp->err.errcode = WSRPCError::kLocalDeserialisationFailure;\n");
+        os.add("comp->err.errmsg = \"Local deserialisation failure.\";\n");
+        os.depth -= 2;
+        os.add("}\n");
+
+        os.depth -= 2;
+        os.add("}\n");
+    }
+
+    os.add("delegate->" + implFunName(ver) + "_didReply(&comp->err");
+    if (!retType->isVoid())
+        os.cadd(", rval");
+    os.cadd(");\n");
 
     os.depth -= 2;
     os.add("}\n");
@@ -488,7 +599,7 @@ void Method::genServerImplCase(OutStream &os, int ver)
     {
         os.add("if (!(" + arg->id + "_obj = ucl_object_lookup(req->params, \"" +
                arg->id + "\"))) {\n");
-        os.add("  vt->invalidParams(req);\n");
+        os.add("  req->err = WSRPCError::invalidParams();\n");
         os.add("  goto end;\n");
         os.add("}\n");
 
@@ -496,7 +607,7 @@ void Method::genServerImplCase(OutStream &os, int ver)
                                       "&" + arg->id, true);
 
         os.add("if (!succeeded) {\n");
-        os.add("  vt->invalidParams(req);\n");
+        os.add("  req->err = WSRPCError::invalidParams();\n");
         os.add("  goto end;\n");
         os.add("}\n\n");
     }
@@ -526,20 +637,48 @@ void Method::genServerImplCase(OutStream &os, int ver)
     os.add("}\n\n");
 }
 
-void Version::genClientCallDecls(OutStream &os)
+void Version::genClientCallDecls(OutStream &os, std::string className)
 {
     for (auto meth : methods)
     {
         os.cadd("static");
         meth->genClientCallDecl(os, num);
         os.cadd(";\n");
+        os.cadd("static");
+        meth->genClientCallAsynchDecl(os, num, className);
+        os.cadd(";\n\n");
     }
 }
 
 void Version::genClientCallImpls(OutStream &os, std::string prefix)
 {
     for (auto meth : methods)
+    {
         meth->genClientCallImpl(os, num, prefix);
+        meth->genClientCallAsynchImpl(os, num, prefix);
+    }
+}
+
+void Version::genClientDelegateDecls(OutStream &os)
+{
+    for (auto meth : methods)
+    {
+        os.cadd("virtual");
+        meth->genClientDelegateDecl(os, num);
+        os.cadd(";\n");
+        os.cadd("static");
+        meth->genClientDelegateDispatcherDecl(os, num);
+        os.cadd(";\n");
+    }
+}
+
+void Version::genClientDelegateImpls(OutStream &os, std::string prefix)
+{
+    for (auto meth : methods)
+    {
+        meth->genClientDelegateImpl(os, num, prefix);
+        meth->genClientDelegateDispatcherImpl(os, num, prefix);
+    }
 }
 
 void Version::genServerImplDecls(OutStream &os)
@@ -588,14 +727,25 @@ void Program::genDef(OutStream &os)
     os.depth -= 2;
     os.add("};\n\n");
 
-    /* client */
-    os.add("class " + className() + "Clnt : public WSRPCClient\n");
+    os.add("class " + className() + "Delegate\n");
     os.add("{\n");
     os.add(" public:\n");
     os.depth += 2;
     for (auto v : versions)
     {
-        v->genClientCallDecls(os);
+        v->genClientDelegateDecls(os);
+    }
+    os.depth -= 2;
+    os.add("};\n\n");
+
+    /* client */
+    os.add("class " + className() + "Clnt \n");
+    os.add("{\n");
+    os.add(" public:\n");
+    os.depth += 2;
+    for (auto v : versions)
+    {
+        v->genClientCallDecls(os, className());
     }
     os.depth -= 2;
     os.add("};\n\n");
@@ -631,6 +781,9 @@ void Program::genClient(OutStream &os)
 {
     for (auto v : versions)
         v->genClientCallImpls(os, className() + "Clnt::");
+
+    for (auto v : versions)
+        v->genClientDelegateImpls(os, className() + "Delegate::");
 }
 
 std::string TrlUnit::hdrName()

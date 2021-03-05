@@ -30,6 +30,6 @@ program io.eComCloud.eci.IManager
 		 * Subscribe to state-change notifications in line with the ISubscriber
 		 * protocol.
 		 */
-		void subscribe() = 0;
+		string subscribe(int hello) = 0;
 	} = 1;
 } = 0x40DD1001;

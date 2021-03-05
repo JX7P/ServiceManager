@@ -9,5 +9,5 @@ target_include_directories(sys.manager
   PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     ${VENDORSRC}/sqlite)
-target_link_libraries(sys.manager eci rt Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(sys.manager eci Threads::Threads ${CMAKE_DL_LIBS})
 set_property(TARGET sys.manager PROPERTY CXX_STANDARD 11)

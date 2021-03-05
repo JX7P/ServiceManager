@@ -337,7 +337,20 @@ struct Method
     /* generates the declaration part of the client call - without a
      * terminating semicolon, so can also be used to head a definition */
     void genClientCallDecl(OutStream &os, int ver, std::string prefix = "");
+    void genClientCallAsynchDecl(OutStream &os, int ver, std::string className,
+                                 std::string prefix = "");
+    void genClientCallCommonPartImpl(OutStream &os, int ver,
+                                     std::string prefix);
     void genClientCallImpl(OutStream &os, int ver, std::string prefix);
+    void genClientCallAsynchImpl(OutStream &os, int ver, std::string prefix);
+
+    void genClientDelegateDecl(OutStream &os, int ver, std::string prefix = "");
+    void genClientDelegateDispatcherDecl(OutStream &os, int ver,
+                                         std::string prefix = "");
+
+    void genClientDelegateImpl(OutStream &os, int ver, std::string prefix = "");
+    void genClientDelegateDispatcherImpl(OutStream &os, int ver,
+                                         std::string prefix = "");
 
     /* generates implementation declaration */
     void genServerImplDecl(OutStream &os, int ver);
@@ -354,8 +367,11 @@ struct Version
     void synthInScope(Scope *aScope);
 
     /* generate the client-call declarations */
-    void genClientCallDecls(OutStream &os);
+    void genClientCallDecls(OutStream &os, std::string className);
     void genClientCallImpls(OutStream &os, std::string prefix);
+
+    void genClientDelegateDecls(OutStream &os);
+    void genClientDelegateImpls(OutStream &os, std::string prefix);
 
     void genServerImplDecls(OutStream &os);
     void genServerImplHandlerDecl(OutStream &os, std::string prefix = "");

@@ -56,8 +56,13 @@ struct WSRPCError
         kLocalDeserialisationFailure = -32501,
     };
 
-    Code errcode;
+    Code errcode = kSuccess;
     std::string errmsg;
+
+    WSRPCError() = default;
+    WSRPCError(Code code, std::string msg);
+
+    static WSRPCError invalidParams();
 };
 
 /**
@@ -86,15 +91,21 @@ struct WSRPCReq
 class WSRPCCompletion
 {
   public:
+    typedef void (*FnDelegateInvoker)(void *, WSRPCCompletion *);
+
     WSRPCTransport *xprt;
     int id;
     bool sendSucceeded;
+    void *delegate;
+    FnDelegateInvoker fnDelegateInvoker;
 
     WSRPCCompletion(WSRPCTransport *xprt, int id);
     ~WSRPCCompletion();
 
     bool wait(); /* wait for a reply. returns true if any reply received before
                     deadline */
+    /** Complete with a response object; delegate will be invoked. Unrefs obj */
+    void completeWith(ucl_object_t *obj);
 
     WSRPCError err;
     ucl_object_t *result = NULL;
@@ -124,13 +135,6 @@ class WSRPCVTable
   public:
 };
 
-class WSRPCClient
-{
-  public:
-    static WSRPCCompletion *sendMsg(WSRPCTransport *xprt, std::string method,
-                                    ucl_object_t *params);
-};
-
 struct WSRPCServiceProvider
 {
     WSRPCVTable *vt;
@@ -149,6 +153,11 @@ class WSRPCTransport
      * the WSRPCListener (or whoever added services to a client) owns the list.
      */
     std::list<WSRPCServiceProvider> *svcs;
+
+    /**
+     * Completions we are awaiting to complete.
+     */
+    std::list<WSRPCCompletion *> completions;
 
     /* Whether we own the svcs list. */
     bool ownSvcs;
@@ -224,12 +233,14 @@ class WSRPCTransport
      * Send a message.
      * @param method Method name.
      * @param params Parameter dictionary
-     * @param attachCompletion Whether to store the completion object in the
-     *   transport. (Not for doing if you are synchronously waiting on that
-     *   completion.)
+     * @param delegate Userdata for the \p fnDelegateInvoker function. If
+     * specified, so must be \p fnDelegateInvoker, and vice versa.
+     * @param fnDelegateInvoker Function to invoke with arguments of this
+     * completion and the value of \p delegate when the completion is completed.
      */
-    WSRPCCompletion *sendMessage(std::string method, ucl_object_t *params,
-                                 bool attachCompletion = true);
+    WSRPCCompletion *sendMessage(
+        std::string method, ucl_object_t *params, void *delegate,
+        WSRPCCompletion::FnDelegateInvoker fnDelegateInvoker);
 };
 
 struct WSRPCListenerDelegate

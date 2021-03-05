@@ -12,8 +12,10 @@ target_include_directories (eci-core PUBLIC
 
 add_library(eci
   Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc
-  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager.hh)
-target_link_libraries (eci eci-core ucl)
+  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager.hh
+  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_svc.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_clnt.cc)
+target_link_libraries (eci eci-core rt ucl)
 
 # installation
 

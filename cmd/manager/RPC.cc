@@ -17,7 +17,9 @@ included with this software
 
 #include "Manager.hh"
 
-bool Manager::subscribe_v1(WSRPCReq *req)
+bool Manager::subscribe_v1(WSRPCReq *req, std::string *rval, int hello)
 {
-    return false;
+    printf("Subscribe request: %d\n", hello);
+    *rval = "Hello";
+    return true;
 }
