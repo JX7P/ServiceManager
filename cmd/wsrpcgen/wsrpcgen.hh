@@ -306,6 +306,20 @@ struct StructDef : public SerialisableDef
     void genDeserImpl(OutStream &os);
 };
 
+struct UnionDef : public SerialisableDef
+{
+    /* enum by which the type is identified */
+    TypeRef *enumType;
+    /* each pair string must be "default" or a possible value of enumType */
+    std::list<std::pair<std::string, std::list<Decl *>>> cases;
+
+    void synthInScope(Scope *aScope);
+
+    void genDef(OutStream &os);
+    void genSerImpl(OutStream &os);
+    void genDeserImpl(OutStream &os);
+};
+
 struct EnumDef : public SerialisableDef
 {
     struct Entry

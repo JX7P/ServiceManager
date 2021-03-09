@@ -73,6 +73,16 @@ void StructDef::synthInScope(Scope *aScope)
         decl->type->synthInScope(this);
 }
 
+void UnionDef::synthInScope(Scope *aScope)
+{
+    Scope::synthInScope(aScope);
+
+    enumType->synthInScope(this);
+    for (auto cas : cases)
+        for (auto decl : cas.second)
+            decl->type->synthInScope(this);
+}
+
 void TypeRef::synthInScope(Scope *aScope)
 {
     std::vector<std::string> parts;

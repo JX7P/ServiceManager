@@ -196,6 +196,15 @@ def(D) ::= STRUCT IDENT(id) LBRACE optdefs(defs) decls_semis(d) RBRACE.
 			S->decls = d;
 			D = S;
         }
+def(D) ::= UNION IDENT(id) LBRACE TYPE IDENT(tID) SEMI cases(c) RBRACE.
+	{
+		UnionDef * U = new UnionDef;
+		U->enumType = new TypeRef;
+		U->enumType->type = tID.stringValue;
+		U->name = id.stringValue;
+		U->cases = c;
+		D = U;
+	}
 def(D) ::= ENUM IDENT(id) LBRACE enum_entries(e) optcomma RBRACE.
 	{
 		EnumDef * E = new EnumDef;
@@ -209,6 +218,18 @@ optcomma ::= .
 
 decls_semis(L) ::= decl(d) SEMI . { L.push_back(d); }
 decls_semis(L) ::= decls_semis(l) decl(d) SEMI. { L = std::move(l); L.push_back(d); }
+
+%type cases { std::list<std::pair<std::string, std::list<Decl *>>> }
+%type cas { std::pair<std::string, std::list<Decl *>> }
+
+cases(L) ::= cas(c) . { L.push_back(c); }
+cases(L) ::= cases(l) cas(c). { L = std::move(l); L.push_back(c); }
+
+cas(C) ::= CASE IDENT(id) COLON decls_semis(D).
+	{
+		C.first = id.stringValue;
+		C.second = D;
+	}
 
 %type enum_entries { std::list<EnumDef::Entry> }
 %type enum_entry { EnumDef::Entry }

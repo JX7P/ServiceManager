@@ -248,6 +248,107 @@ void StructDef::genDeserImpl(OutStream &os)
     os.add("}\n");
 }
 
+void UnionDef::genDef(OutStream &os)
+{
+    os.add("struct " + name + " {\n");
+
+    os.depth += 2;
+
+    os.add(enumType->makeDecl("type") + ";\n");
+
+    /* union cases */
+    os.add("union {\n");
+    for (auto cas : cases)
+    {
+        os.add("struct " + cas.first + "{\n");
+        os.depth += 2;
+        for (auto decl : cas.second)
+            os.add(decl->type->makeDecl(decl->id) + ";\n");
+        os.depth -= 2;
+        os.add("};\n\n");
+    }
+    os.add("} value;\n\n");
+
+    /* serialisation function */
+    genSerDecl(os);
+    os.cadd(";\n");
+
+    /* deserialisation function */
+    genDeserDecl(os, false, "static ");
+    os.cadd(";\n");
+
+    os.depth -= 2;
+    os.add("};\n");
+}
+
+void UnionDef::genSerImpl(OutStream &os)
+{
+    for (auto type : types)
+        /* always true, structs grammatically can't contain otherwise */
+        dynamic_cast<SerialisableDef *>(type)->genSerImpl(os);
+
+    genSerDecl(os, true);
+    os.cadd("\n");
+    os.add("{\n");
+    os.depth += 2;
+
+    /*    os.add("ucl_object_t * out = ucl_object_typed_new(UCL_OBJECT);\n");
+        for (auto decl : decls)
+            os.add("ucl_object_t * u" + decl->id + ";\n");
+        for (auto decl : decls)
+            decl->type->genSerialiseInto(os, decl->id, "u" + decl->id);
+        for (auto decl : decls)
+            os.add("ucl_object_insert_key(out, u" + decl->id + ", " +
+                   quote(decl->id) + ", 0, false);\n");
+        os.add("return out;\n");*/
+
+    os.depth -= 2;
+    os.add("}\n");
+}
+
+void UnionDef::genDeserImpl(OutStream &os)
+{
+    for (auto type : types)
+    {
+        os.add("/* for sub-member " + type->name + " */\n");
+        dynamic_cast<SerialisableDef *>(type)->genDeserImpl(os);
+    }
+
+    genDeserDecl(os, true);
+    os.cadd("\n");
+    os.add("{\n");
+    os.depth += 2;
+
+    /*    os.add("bool suc = true;\n");
+
+        /* ucl object member declarations
+        for (auto decl : decls)
+            os.add("const ucl_object_t * u" + decl->id + ";\n");
+
+        os.add("if (!(ucl_object_type(obj) == UCL_OBJECT))\n");
+        os.add("  return false;\n");
+
+        /* assign ucl object members by looking them up; if unfound, return
+        for (auto decl : decls)
+            os.add("if (!(u" + decl->id + " = ucl_object_lookup(obj, " +
+                   quote(decl->id) + "))) return false;\n");
+
+        os.add("/* member deserialisation \n");
+        for (auto decl : decls)
+        {
+            os.add("/* deserialise member " + decl->id + " \n");
+        decl->type->genDeserialiseInto(os, "suc", "u" + decl->id,
+                                       "out->" + decl->id);
+    os.add("if (!suc) return false;\n\n");
+}
+
+os.cadd("\n");
+*/ os.add("return true;\n");
+
+    os.depth -= 2;
+    os.add("}\n");
+}
+
 void EnumDef::genDef(OutStream &os)
 {
     os.add("struct " + name + "{\n");

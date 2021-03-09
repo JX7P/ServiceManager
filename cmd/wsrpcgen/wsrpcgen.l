@@ -60,6 +60,9 @@ NEWLINE ((\n)|(\r)|(\r\n))
 "svc_byrref"                    { p(SVC_BYRREF); }
 "struct"                        { p(STRUCT); }
 "enum"                          { p(ENUM); }
+"union"                         { p(UNION); }
+"case"                          { p(CASE); }
+"type"                          { p(TYPE); }
 
 "-"?"0"[xX][0-9A-F]+                                { ph(INTEGER); }
 -[0-9]+                                             { pi(INTEGER); }
@@ -68,6 +71,7 @@ NEWLINE ((\n)|(\r)|(\r\n))
 L?\"(\\.|[^\\"])*\"	                                { ps(STRLIT); }
 
 
+":"                             { p(COLON); }
 ";"                             { p(SEMI); }
 "{"                             { p(LBRACE); }
 "}"                             { p(RBRACE); }
