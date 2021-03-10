@@ -205,6 +205,24 @@ def(D) ::= UNION IDENT(id) LBRACE TYPE IDENT(tID) SEMI cases(c) RBRACE.
 		U->cases = c;
 		D = U;
 	}
+def(D) ::= UNION IDENT(id) LBRACE cases(c) RBRACE.
+	{
+		UnionDef * U = new UnionDef;
+		EnumDef * typeEnum = new EnumDef;
+
+		typeEnum->name = "Type";
+		for (auto cas: c)
+		{
+			typeEnum->entries.push_back({cas.first});
+		}
+
+		U->enumType = new TypeRef;
+		U->enumType->type = "Type";
+		U->types.push_back(typeEnum);
+		U->name = id.stringValue;
+		U->cases = c;
+		D = U;
+	}
 def(D) ::= ENUM IDENT(id) LBRACE enum_entries(e) optcomma RBRACE.
 	{
 		EnumDef * E = new EnumDef;

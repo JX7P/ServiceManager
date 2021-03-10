@@ -254,6 +254,10 @@ void UnionDef::genDef(OutStream &os)
 
     os.depth += 2;
 
+    /* union member types */
+    for (auto type : types)
+        type->genDef(os);
+
     os.add(enumType->makeDecl("type") + ";\n");
 
     /* union cases */
@@ -308,6 +312,9 @@ void UnionDef::genSerImpl(OutStream &os)
 
 void UnionDef::genDeserImpl(OutStream &os)
 {
+    bool first = true;
+
+    /* generate nested type's deserialisation functions */
     for (auto type : types)
     {
         os.add("/* for sub-member " + type->name + " */\n");
@@ -319,27 +326,55 @@ void UnionDef::genDeserImpl(OutStream &os)
     os.add("{\n");
     os.depth += 2;
 
-    /*    os.add("bool suc = true;\n");
+    os.add("bool suc = true;\n");
+    os.add("const ucl_object_t * uclType;\n");
+    os.add(enumType->makeDecl("type") + ";\n\n");
 
-        /* ucl object member declarations
-        for (auto decl : decls)
-            os.add("const ucl_object_t * u" + decl->id + ";\n");
+    /* extract the type member from the object */
+    os.add("if (!(uclType = ucl_object_lookup(obj, " + quote("type") + "))) " +
+           " return false;\n");
 
-        os.add("if (!(ucl_object_type(obj) == UCL_OBJECT))\n");
-        os.add("  return false;\n");
-
-        /* assign ucl object members by looking them up; if unfound, return
-        for (auto decl : decls)
-            os.add("if (!(u" + decl->id + " = ucl_object_lookup(obj, " +
-                   quote(decl->id) + "))) return false;\n");
-
-        os.add("/* member deserialisation \n");
-        for (auto decl : decls)
-        {
-            os.add("/* deserialise member " + decl->id + " \n");
-        decl->type->genDeserialiseInto(os, "suc", "u" + decl->id,
-                                       "out->" + decl->id);
+    /* deserialise the type */
+    enumType->genDeserialiseInto(os, "suc", "uclType", "type");
     os.add("if (!suc) return false;\n\n");
+
+    /* now switch on the type */
+    for (auto cas : cases)
+    {
+        if (!first)
+            os.add("else\n");
+        else
+            os.add("");
+
+        /* add elses from next case onwards */
+        first = false;
+
+        os.cadd("if (type ==" + enumType->canonicalName() + "::" + cas.first +
+                ") {\n");
+        os.depth += 2;
+        os.depth -= 2;
+        os.add("}\n");
+    }
+
+    /* ucl object member declarations
+    for (auto decl : decls)
+        os.add("const ucl_object_t * u" + decl->id + ";\n");
+
+    os.add("if (!(ucl_object_type(obj) == UCL_OBJECT))\n");
+    os.add("  return false;\n");
+
+    /* assign ucl object members by looking them up; if unfound, return
+    for (auto decl : decls)
+        os.add("if (!(u" + decl->id + " = ucl_object_lookup(obj, " +
+               quote(decl->id) + "))) return false;\n");
+
+    os.add("/* member deserialisation \n");
+    for (auto decl : decls)
+    {
+        os.add("/* deserialise member " + decl->id + " \n");
+    decl->type->genDeserialiseInto(os, "suc", "u" + decl->id,
+                                   "out->" + decl->id);
+os.add("if (!suc) return false;\n\n");
 }
 
 os.cadd("\n");
