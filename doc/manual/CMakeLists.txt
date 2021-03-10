@@ -1,4 +1,4 @@
-set (MDOCS)
+set (MDOCS service_bundle.5)
 
 foreach(MAN_OUT ${MDOCS})
     get_filename_component (MAN_EXT ${MAN_OUT} LAST_EXT)

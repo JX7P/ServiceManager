@@ -86,8 +86,7 @@ if(ECI_BUILD_MANUAL)
 add_subdirectory(doc/manual)
 endif()
 
-add_subdirectory(lib/eci)
-add_subdirectory(lib/eci-daemon)
+add_subdirectory(lib)
 
 add_subdirectory(cmd)
 

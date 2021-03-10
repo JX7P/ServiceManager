@@ -124,6 +124,11 @@ int Backend::txGetSingleInt(sqlite3 *conn, const char *query, int *out)
     return res;
 }
 
+void Backend::sqliteLog(void *userData, int errCode, const char *errMsg)
+{
+    ((Backend *)userData)->log(kWarn, "SQLite: %s\n", errMsg);
+}
+
 void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
                    bool startReadOnly, bool recreatePersistentDb,
                    bool reattachVolatileRepository)
@@ -131,6 +136,8 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     pathPersistentDb = aPathPersistentDb;
     pathVolatileDb = aPathVolatileDb;
     readOnly = startReadOnly;
+
+    sqlite3_config(SQLITE_CONFIG_LOG, sqliteLog, this);
 
     /* setup persistent repository */
     if (recreatePersistentDb)
@@ -148,7 +155,7 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
                                   SQLITE_OPEN_NOMUTEX,
                               NULL);
         if (res != SQLITE_OK)
-            die("Failed to create persistent repository: %s",
+            die("Failed to create persistent repository: %s\n",
                 sqlite3_errmsg(connPersistent));
 
         if (repositoryInit(connPersistent, krepositorySchema_sql) != SQLITE_OK)
@@ -243,4 +250,10 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
             die("Failed to initialise volatile repository: %s\n",
                 sqlite3_errmsg(connVolatile));
     }
+}
+
+void Backend::shutdown()
+{
+    sqlite3_close(connVolatile);
+    sqlite3_close(connPersistent);
 }

@@ -1,0 +1,9 @@
+
+name B;
+depends {
+    after [ a ];
+    requires [ a ];
+};
+execStart {
+    command = "/bin/sleep 500";
+};

@@ -1,0 +1,97 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "$ref": "#/definitions/Class",
+    "definitions": {
+        "Class": {
+            "description": "A service bundle's root element.",
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/Property"
+            },
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "depends": {
+                    "$ref": "#/definitions/Dependencies"
+                },
+                "instance": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/Instance"
+                    }
+                }
+            },
+            "required": [
+                "name"
+            ],
+            "title": "Class"
+        },
+        "Instance": {
+            "description": "Instances of a class in a service bundle.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            },
+            "title": "Instance"
+        },
+        "Dependencies": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "requires": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InstanceName"
+                    }
+                },
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InstanceName"
+                    }
+                },
+                "conflicts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InstanceName"
+                    }
+                },
+                "after": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InstanceName"
+                    }
+                },
+                "before": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InstanceName"
+                    }
+                }
+            }
+        },
+        "Property": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "$ref": "#/definitions/Page"
+                }
+            ]
+        },
+        "InstanceName": {
+            "type": "string"
+        },
+        "Page": {
+            "type": "object",
+            "additionalItems": {
+                "$ref": "#/definitions/Property"
+            }
+        }
+    }
+}

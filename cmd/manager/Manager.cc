@@ -150,8 +150,9 @@ void Manager::run()
     while (shouldRun)
     {
         loop.loop(NULL);
-        usleep(10000);
     }
+
+    bend.shutdown();
 }
 
 void Manager::fdEvent(EventLoop *loop, int fd, int revents)
@@ -163,7 +164,10 @@ void Manager::fdEvent(EventLoop *loop, int fd, int revents)
 void Manager::signalEvent(EventLoop *loop, int signum)
 {
     if (signum == SIGINT)
+    {
+        log(kInfo, "Shutting down in response to SIGINT.\n");
         shouldRun = false;
+    }
     else
         printf("Got signal %d\n", signum);
 }

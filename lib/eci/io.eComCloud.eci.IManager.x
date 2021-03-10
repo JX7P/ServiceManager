@@ -22,6 +22,13 @@ included with this software
 
 %#include "eci/ECI.hh"
 
+union PropertyValue {
+	case kString:
+		string str;
+	case kPage:
+		int<> props;
+};
+
 program io.eComCloud.eci.IManager
 {
 	version manager1

@@ -1,3 +1,4 @@
+PRAGMA journal_mode=WAL;
 BEGIN TRANSACTION;
 CREATE TABLE "Services" (
 	"ServiceID"	INTEGER NOT NULL UNIQUE,
@@ -33,6 +34,7 @@ CREATE TABLE "SnapshotProperty" (
 );
 CREATE TABLE "Properties" (
 	"PropertyID"	INTEGER NOT NULL UNIQUE,
+	"RefCount"		INTEGER NOT NULL,
 	"FK_Parent_InstanceID"	INTEGER,
 	"FK_Parent_ServiceID"	INTEGER,
 	"FK_Parent_PropertyID"	INTEGER,
@@ -45,8 +47,9 @@ CREATE TABLE "Properties" (
 );
 CREATE TABLE "PropertyValues" (
 	"PropertyValueID"	INTEGER NOT NULL UNIQUE,
+	"RefCount"			INTEGER NOT NULL,
 	"FK_BundleID"	INTEGER,
-	"Type"	TEXT NOT NULL CHECK("Type" = "String" OR "Type" = "Page"),
+	"Type"	TEXT NOT NULL CHECK("Type" = 'String' OR "Type" = 'Page'),
 	"PropertyKey"	TEXT NOT NULL,
 	"StringValue"	TEXT,
 	FOREIGN KEY("FK_BundleID") REFERENCES "Bundles"("BundleID"),

@@ -61,6 +61,9 @@ class Backend : public Logger
     /** Try to get a single int. -1 on failure. */
     int txGetSingleInt(sqlite3 *conn, const char *query, int *result);
 
+    /* Print an SQLite error. */
+    static void sqliteLog(void *userData, int errCode, const char *errMsg);
+
   public:
     Backend(Manager *mgr);
 
@@ -83,6 +86,9 @@ class Backend : public Logger
     void init(const char *aPathPersistentDb, const char *aPathVolatileDb,
               bool startReadOnly, bool recreatePersistentDb,
               bool reattachVolatileRepository);
+
+    /** Shut down the database backend. */
+    void shutdown();
 };
 
 #endif
