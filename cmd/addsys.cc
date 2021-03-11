@@ -32,6 +32,7 @@ included with this software
 #include "eci/Event.hh"
 #include "eci/Logger.hh"
 #include "eci/Platform.h"
+#include "eci/SQLite.h"
 #include "io.eComCloud.eci.IManager.hh"
 #include "serviceBundleSchema.json.h"
 #include "sqlite3.h"
@@ -91,7 +92,9 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
     /* List of processed classes to be imported */
     std::list<Class> classes;
 
-    void import(int layer, const char *bundlePath);
+    void import(int layer, Class *klass);
+
+    void parse(int layer, const char *bundlePath);
     void process(const ucl_object_t *obj);
     void processDeps(std::list<std::unique_ptr<Property>> &properties,
                      const ucl_object_t *obj, bool isDependents = false);
@@ -108,7 +111,38 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
     int main(int argc, char *argv[]);
 };
 
-void AddSys::import(int layer, const char *bundlePath)
+void AddSys::import(int layer, Class *klass)
+{
+    int res;
+    int svcId;
+
+    res = sqlite3_exec(conn, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (res != SQLITE_OK)
+        die("Failed to begin transaction: %s\n", sqlite3_errmsg(conn));
+
+    res = sqlite3_get_single_intf(conn, &svcId,
+                                  "SELECT 1 FROM Services WHERE Name = '%s';",
+                                  klass->name.c_str());
+    if (res == SQLITE_DONE)
+    {
+        res = sqlite3_execf(conn, NULL, NULL, NULL,
+                            "INSERT INTO Services(Name) VALUES ('%s');",
+                            klass->name.c_str());
+        if (res != SQLITE_OK)
+            die("Failed to insert service name: %d\n", sqlite3_errmsg(conn));
+        svcId = sqlite3_last_insert_rowid(conn);
+    }
+    else if (res != SQLITE_ROW)
+        die("Failed to get service ID: %s\n", sqlite3_errmsg(conn));
+
+    printf("Service ID: %d\n", svcId);
+
+    res = sqlite3_exec(conn, "COMMIT;", NULL, NULL, NULL);
+    if (res != SQLITE_OK)
+        die("Failed to commit: %s\n", sqlite3_errmsg(conn));
+}
+
+void AddSys::parse(int layer, const char *bundlePath)
 {
     ucl_object_t *obj = NULL;
     ucl_schema_error errValidation;
@@ -336,7 +370,10 @@ int AddSys::main(int argc, char *argv[])
     if (res != SQLITE_OK)
         die("Failed to open repository: %s\n", sqlite3_errmsg(conn));
 
-    import(layer, argv[optind]);
+    parse(layer, argv[optind]);
+
+    for (auto &klass : classes)
+        import(layer, &klass);
 
     return 0;
 }

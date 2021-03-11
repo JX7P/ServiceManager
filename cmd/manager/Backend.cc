@@ -23,17 +23,12 @@ included with this software
 #include "Backend.hh"
 #include "Manager.hh"
 #include "eci/Core.h"
+#include "eci/SQLite.h"
 #include "repositorySchema.sql.h"
 #include "sqlite3.h"
 #include "volatileRepositorySchema.sql.h"
 
 #define Str(s) #s
-
-struct ExecGetSingleIntContext
-{
-    int value;
-    int result;
-};
 
 static int eciVASPrintF(char **out, const char *fmt, va_list args)
 {
@@ -73,7 +68,7 @@ int Backend::metadataValidate(sqlite3 *conn)
     int res;
     int ver;
 
-    res = txGetSingleInt(conn, "SELECT Version FROM Metadata;", &ver);
+    res = sqlite3_get_single_int(conn, &ver, "SELECT Version FROM Metadata;");
     if (res != SQLITE_OK)
     {
         log(kErr, "Failed to get version from the metadata table: %s\n",
@@ -94,33 +89,6 @@ int Backend::repositoryInit(sqlite3 *conn, const char *schema)
         return res;
 
     res = metadataInit(conn);
-    return res;
-}
-
-int Backend::txGetSingleInt(sqlite3 *conn, const char *query, int *out)
-{
-    sqlite3_stmt *stmt;
-    int res = sqlite3_prepare_v2(conn, query, -1, &stmt, 0);
-
-    if (res != SQLITE_OK)
-    {
-        log(kErr, "Failed to prepare transaction: %s\n", sqlite3_errmsg(conn));
-        return res;
-    }
-
-    res = sqlite3_step(stmt);
-
-    if (res == SQLITE_ROW)
-    {
-        *out = sqlite3_column_int(stmt, 0);
-        res = SQLITE_OK;
-    }
-    else if (res == SQLITE_DONE)
-    {
-        log(kWarn, "no value returned by query %s\n", query);
-    }
-
-    sqlite3_finalize(stmt);
     return res;
 }
 

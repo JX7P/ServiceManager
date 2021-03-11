@@ -11,7 +11,7 @@ target_include_directories (eci-core PUBLIC
   $<BUILD_INTERFACE:${HDR}>)
 
 add_library(eci
-  Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc
+  Event-${ECI_EVENT_DRIVER}.cc Logger.cc WSRPC.cc SQLite.c
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager.hh
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_clnt.cc
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_conv.cc
