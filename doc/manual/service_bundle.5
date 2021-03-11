@@ -14,23 +14,13 @@ may import service descriptions or export them (with the help of
 and
 .Xr exportsys 8
 respectively) to a
-.Em UCL
-format. UCL is a superset of
-.Em JSON Ns ,
-replicating its object model, and indeed if preferred one may write service
-descriptions in straight JSON. A file containing a service description is known
-as a
+.Em UCL Ns No -based
+format. A file containing a service description is known as a
 .Em service manifest Ns .
 
 The service bundle format is defined by the JSON-Schema (v4) found in
 .Pa /lib/sys/serviceBundleSchema.json Ns .
-Being a
-.Em UCL
-format, all the UCL bonus features such as
-.Em includes
-are supported. (It must be clearly understood that these features are of purely
-lexicographic significance, and are no longer reified beyond the point of
-parsing.)
+This document summarises the format.
 
 .Sh BUNDLE STRUCTURE
 A well-formed service bundle shall consist of a dictionary with keys:
@@ -42,6 +32,9 @@ a
 .It \(dqdepends\(dq (optional)
 .Sx DEPENDENCIES
 
+.It \(dqdependents\(dq (optional)
+.Sx DEPENDENTS
+
 .It \(dqinstances\(dq (optional)
 .Sx INSTANCES ,
 a dictionary of instance names to instance dictionaries, the instance
@@ -50,9 +43,16 @@ dictionaries being well-formed if they contain:
 .Bl -tag
 .It \(dqdepends\(dq (optional)
 .Sx DEPENDENCIES
+.It \(dqdependents\(dq (optional)
+.Sx DEPENDENTS
+.It \(dqmethods\(dq (optional)
+.Sx METHODS
 .It all other keys (optional)
 .Sx PROPERTIES Ns
 .El
+
+.It \(dqmethods\(dq (optional)
+.Sx METHODS
 
 .It all other keys (optional)
 .Sx PROPERTIES
@@ -80,10 +80,11 @@ A dictionary containing pairs of keys denoting
 .Em dependency type
 (see
 .Xr eComInit 7 Ns ,
-subsection
+ss.
 .Sy DEPENDENCIES Ns No ,
 for details) to arrays of
-.Em instance names Ns No .
+.Em instance names Ns No ,
+denoting instances on which this instance will depend in some way.
 
 .Pp
 Example (UCL style):
@@ -104,11 +105,40 @@ Example (JSON style):
     },
 .Ed
 
+.Ss DEPENDENTS
+A dictionary containing pairs of keys denoting
+.Em dependency type
+(see
+.Xr eComInit 7 Ns ,
+ss.
+.Sy DEPENDENCIES Ns No ,
+for details) to arrays of
+.Em instance names Ns No ,
+denoting instances which will
+.Em depend on this instance
+in some way.
+
+.Pp
+Example (UCL style):
+.Bd -literal -offset -indent
+dependents requires [ runlevel$multi-user ]
+.Ed
+
+.Pp
+Example (JSON style):
+.Bd -literal -offset -indent
+    "dependents": {
+        "requires": [
+            "runlevel$multi-user",
+        ]
+    },
+.Ed
+
 .Ss INSTANCES
 A dictionary containing keys of instance names (see
 .Xr eComInit 8 Ns No ,
-subsection
-.Sy Naming Ns No ,
+ss.
+.Sy NAMING Ns No ,
 for further details) to values of dictionaries describing an instance. These
 dictionaries may contain an optional
 .Sx DEPENDS
@@ -119,25 +149,72 @@ members.
 .Pp
 Example (UCL style):
 .Bd -literal -offset -indent
-depends requires [ runlevel$single-user, file$/etc/passwd ]
-depends after [ runlevel$single-user ]
+instances {
+    /dev/console {
+        depends requires [ file$%i ];
+        methods execStart {
+            command "/sbin/getty /dev/console linux";
+        };
+    };
+    /dev/tty1 {};
+};
 .Ed
 
 .Pp
 Example (JSON style):
 .Bd -literal -offset -indent
-    "depends": {
-        "after": [
-            "runlevel$root-filesystem",
-            "hostname",
-            "utmpx"
-        ]
-    },
+    "instances": {
+        "/dev/console": {
+            "depends": {
+                "requires": [
+                    "file$%i"
+                ]
+            },
+            methods {
+                "execStart": {
+                    "command": "/sbin/getty /dev/console linux"
+                }
+            }
+        },
+        "/dev/tty1": { }
+    }
+.Ed
+
+.Ss METHODS
+A dictionary containing keys of method names to values of dictionaries
+describing the method. See
+.Xr sys_method 7
+for further details on methods. The dictionary member is a
+.Em property page
+and thus admits
+.Sx PROPERTIES
+members.
+
+.Pp
+Example (UCL style):
+.Bd -literal -offset -indent
+methods execStart {
+    command "/bin/sleep 500";
+};
+.Ed
+
+.Pp
+Example (JSON style):
+.Bd -literal -offset -indent
+    "methods": {
+        "execStart": {
+            "command": "/bin/sleep 500"
+        },
+    }
 .Ed
 
 .Ss PROPERTIES
 All dictionary pairs in a Class or Instance not either a
 .Sx DEPENDS Ns No ,
+a
+.Sx DEPENDENTS Ns No ,
+a
+.Sx METHODS Ns No ,
 or in the case of a Class, an
 .Sx INSTANCES
 member, shall be interpreted as a
@@ -182,12 +259,12 @@ Example (JSON style):
 .Bd -literal -offset indent
 name getty;
 depends after [ runlevel$root-filesystem, hostname, utmpx ];
-requires [ file:%i ]
+requires [ file:%i ];
 instances {
-    "/dev/console" {};
-    "/dev/tty1" {};
+    /dev/console {};
+    /dev/tty1 {};
 };
-execStart {
+methods execStart {
     command "/sbin/getty %i xterm";
 };
 .Ed

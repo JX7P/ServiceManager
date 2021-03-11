@@ -24,6 +24,7 @@ included with this software
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <cassert>
 #include <memory>
 #include <string>
 #include <unistd.h>
@@ -35,13 +36,21 @@ included with this software
 #include "serviceBundleSchema.json.h"
 #include "sqlite3.h"
 
-class Property
+struct Property
 {
+    std::string key;
+
+    Property() = default;
+    Property(std::string key) : key(std::move(key)){};
 };
 
 struct PropString : public Property
 {
     std::string value;
+
+    PropString() = default;
+    PropString(std::string key, std::string value)
+        : Property(std::move(key)), value(std::move(value)){};
 };
 
 struct PropPage : public Property
@@ -49,6 +58,7 @@ struct PropPage : public Property
     std::list<std::unique_ptr<Property>> properties;
 
     PropPage() = default;
+    PropPage(std::string key) : Property(std::move(key)){};
     PropPage(const PropPage &) = delete;
 };
 
@@ -56,6 +66,7 @@ struct Instance
 {
     std::string clsName;
     std::string name;
+    std::list<std::unique_ptr<Property>> properties;
 
     Instance() = default;
     Instance(const Instance &) = delete;
@@ -65,6 +76,7 @@ struct Class
 {
     std::string name;
     std::list<Instance> instances;
+    std::list<std::unique_ptr<Property>> properties;
 
     Class() = default;
     Class(const Class &) = delete;
@@ -81,6 +93,14 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
 
     void import(int layer, const char *bundlePath);
     void process(const ucl_object_t *obj);
+    void processDeps(std::list<std::unique_ptr<Property>> &properties,
+                     const ucl_object_t *obj, bool isDependents = false);
+    void processInst(std::list<Instance> &nsts, const ucl_object_t *obj);
+    /* Process a UCL page adding it to the properties list */
+    void processPage(std::list<std::unique_ptr<Property>> &properties,
+                     const ucl_object_t *obj, const char *type = NULL);
+    void processProp(std::list<std::unique_ptr<Property>> &properties,
+                     const ucl_object_t *obj);
 
   public:
     AddSys() : Logger("addsys"){};
@@ -124,14 +144,140 @@ cleanup:
         ucl_obj_unref(obj);
 }
 
-void AddSys::process(const ucl_object_t *obj)
+#define UclIterate(top, iterName, objName, expand)                             \
+    do                                                                         \
+    {                                                                          \
+        ucl_object_iter_t iterName = NULL;                                     \
+        const ucl_object_t *objName;                                           \
+        while ((objName = ucl_iterate_object(top, &iterName, expand)))
+
+#define UclCloseIterate()                                                      \
+    }                                                                          \
+    while (0)
+
+void AddSys::process(const ucl_object_t *uclCls)
 {
     Class *cls;
+    ucl_object_iter_t it = NULL;
+    const ucl_object_t *obj;
 
     classes.emplace_back();
     cls = &classes.back();
 
-    printf("Out: %s\n", ucl_object_emit(obj, UCL_EMIT_JSON));
+    while ((obj = ucl_iterate_object(uclCls, &it, true)))
+    {
+        const char *key = ucl_object_key(obj);
+        if (!strcmp(key, "name"))
+            cls->name = ucl_object_tostring(obj);
+        else if (!strcmp(key, "depends"))
+            processDeps(cls->properties, obj);
+        else if (!strcmp(key, "dependents"))
+            processDeps(cls->properties, obj, true);
+        else if (!strcmp(key, "instances"))
+        {
+            UclIterate(obj, instIt, inst, true)
+                processInst(cls->instances, inst);
+            UclCloseIterate();
+        }
+        else if (!strcmp(key, "methods"))
+        {
+            UclIterate(obj, depsIt, uclPage, true)
+                processPage(cls->properties, uclPage, "method");
+            UclCloseIterate();
+        }
+        else
+            processProp(cls->properties, obj);
+    }
+}
+
+void AddSys::processDeps(std::list<std::unique_ptr<Property>> &properties,
+                         const ucl_object_t *obj, bool isDependents)
+{
+    UclIterate(obj, depsIt, uclArrDep, true)
+    {
+        const char *depType = ucl_object_key(uclArrDep);
+
+        UclIterate(uclArrDep, depIt, uclDep, true)
+        {
+            PropPage *page = new PropPage;
+            const char *nstName = ucl_object_tostring(uclDep);
+            PropString *propNstPath = new PropString("instance", nstName);
+            PropString *propDepType = new PropString(
+                "type", isDependents ? "dependent" : "dependency");
+
+            page->key.append("dependency_");
+            page->key.append(depType);
+            page->key.append(nstName);
+
+            properties.emplace_back(page);
+        }
+        UclCloseIterate();
+    }
+    UclCloseIterate();
+}
+
+void AddSys::processInst(std::list<Instance> &nsts, const ucl_object_t *inst)
+{
+    Instance *nst;
+
+    nsts.emplace_back();
+    nst = &nsts.back();
+
+    nst->name = ucl_object_key(inst);
+
+    UclIterate(inst, objIt, obj, true)
+    {
+        const char *key = ucl_object_key(obj);
+        if (!strcmp(key, "depends"))
+            processDeps(nst->properties, obj);
+        else if (!strcmp(key, "dependents"))
+            processDeps(nst->properties, obj, true);
+        else if (!strcmp(key, "methods"))
+        {
+            UclIterate(obj, depsIt, uclPage, true)
+                processPage(nst->properties, uclPage, "method");
+            UclCloseIterate();
+        }
+        else
+
+            printf("extra key: \"%s\"\n", key);
+    }
+    UclCloseIterate();
+}
+
+void AddSys::processPage(std::list<std::unique_ptr<Property>> &properties,
+                         const ucl_object_t *obj, const char *type)
+{
+    PropPage *page = new PropPage;
+
+    assert(ucl_object_type(obj) == UCL_OBJECT);
+
+    page->key = ucl_object_key(obj);
+
+    if (!type)
+        page->properties.emplace_back(new PropString("type", type));
+
+    UclIterate(obj, propsIt, member, true)
+    {
+        if (ucl_object_type(member) == UCL_STRING)
+            page->properties.emplace_back(new PropString(
+                ucl_object_key(member), ucl_object_tostring(member)));
+        else
+            processPage(page->properties, member);
+    }
+    UclCloseIterate();
+
+    properties.emplace_back(std::move(page));
+}
+
+void AddSys::processProp(std::list<std::unique_ptr<Property>> &properties,
+                         const ucl_object_t *obj)
+{
+    if (ucl_object_type(obj) == UCL_STRING)
+        properties.emplace_back(
+            new PropString(ucl_object_key(obj), ucl_object_tostring(obj)));
+    else
+        processPage(properties, obj);
 }
 
 int AddSys::main(int argc, char *argv[])

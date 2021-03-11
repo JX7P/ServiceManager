@@ -2,8 +2,10 @@
 name B;
 depends {
     after [ a ];
-    requires [ a ];
+    requires [ a, nonexistent ];
 };
-execStart {
-    command = "/bin/sleep 500";
+methods execStart {
+    command = a b c;
 };
+
+instances a {};
