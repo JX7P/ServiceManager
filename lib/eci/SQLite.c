@@ -19,9 +19,11 @@ included with this software
  */
 
 #include <sys/types.h>
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "eci/SQLite.h"
@@ -55,6 +57,7 @@ static int eciVASPrintF(char **out, const char *fmt, va_list args)
     if (eciVASPrintF(&query, fmt, args) < 0)                                   \
         return SQLITE_NOMEM;                                                   \
     res = fun(__VA_ARGS__);                                                    \
+    printf("QUERY: %s\n", query);                                              \
     free(query);                                                               \
                                                                                \
     va_end(args);                                                              \
@@ -64,6 +67,16 @@ int sqlite3_execf(sqlite3 *conn, int (*callback)(void *, int, char **, char **),
                   void *arg, char **errmsg, const char *fmt, ...)
 {
     FmtWrapper(sqlite3_exec, conn, query, callback, arg, errmsg);
+}
+
+int sqlite3_prepare_v2f(
+    sqlite3 *db,           /* Database handle */
+    sqlite3_stmt **ppStmt, /* OUT: Statement handle */
+    const char **pzTail,   /* OUT: Pointer to unused portion of zSql */
+    const char *fmt,       /* SQL statement, UTF-8 encoded */
+    ...)
+{
+    FmtWrapper(sqlite3_prepare_v2, db, query, -1, ppStmt, pzTail);
 }
 
 int sqlite3_get_single_int(sqlite3 *conn, int *result, const char *query)
@@ -98,4 +111,32 @@ int sqlite3_get_single_intf(sqlite3 *conn, int *result, const char *fmt, ...)
 
     va_end(args);
     return res;
+}
+
+int sqlite3_get_two_int(sqlite3 *conn, int *result1, int *result2,
+                        const char *query)
+{
+    sqlite3_stmt *stmt;
+    int res = sqlite3_prepare_v2(conn, query, -1, &stmt, 0);
+
+    if (res != SQLITE_OK)
+        return res;
+
+    res = sqlite3_step(stmt);
+
+    if (res == SQLITE_ROW)
+    {
+        assert(sqlite3_column_count(stmt) >= 2);
+        *result1 = sqlite3_column_int(stmt, 0);
+        *result2 = sqlite3_column_int(stmt, 1);
+    }
+
+    sqlite3_finalize(stmt);
+    return res;
+}
+
+int sqlite3_get_two_intf(sqlite3 *conn, int *result1, int *result2,
+                         const char *fmt, ...)
+{
+    FmtWrapper(sqlite3_get_two_int, conn, result1, result2, query);
 }

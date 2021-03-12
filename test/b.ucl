@@ -1,5 +1,8 @@
 
 name B;
+
+testProp hello;
+
 depends {
     after [ a ];
     requires [ a, nonexistent ];

@@ -22,9 +22,11 @@ included with this software
  * new configuration will not be made live until a refresh command is issued.
  */
 
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <cassert>
+#include <limits.h>
 #include <memory>
 #include <string>
 #include <unistd.h>
@@ -43,6 +45,7 @@ struct Property
 
     Property() = default;
     Property(std::string key) : key(std::move(key)){};
+    virtual ~Property() = default;
 };
 
 struct PropString : public Property
@@ -92,7 +95,13 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
     /* List of processed classes to be imported */
     std::list<Class> classes;
 
-    void import(int layer, Class *klass);
+    /* Delete a bundle from the repository, along with all its PropertyValues
+     * and their Properties. */
+    void deleteBundle(int bundleID);
+
+    void import(int layer, const char *bundlePath, Class *klass);
+    void importProp(int bundleID, int parentSvcId, int parentInstId,
+                    int parentPageId, Property *prop);
 
     void parse(int layer, const char *bundlePath);
     void process(const ucl_object_t *obj);
@@ -111,18 +120,110 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
     int main(int argc, char *argv[]);
 };
 
-void AddSys::import(int layer, Class *klass)
+void AddSys::deleteBundle(int bundleID)
+{
+    sqlite3_stmt *stmt;
+    int res = sqlite3_prepare_v2f(conn, &stmt, 0,
+                                  "SELECT rowid FROM PropertyValues "
+                                  "WHERE FK_BundleID = %d;",
+                                  bundleID);
+
+    if (res != SQLITE_OK)
+        die("Failed to get old property values: %s\n", sqlite3_errmsg(conn));
+
+    while ((res = sqlite3_step(stmt)) != SQLITE_DONE)
+    {
+        if (res == SQLITE_ROW)
+        {
+            int rowID = sqlite3_column_int(stmt, 0);
+
+            res = sqlite3_execf(conn, NULL, NULL, NULL,
+                                "DELETE FROM PropertyValues WHERE rowid = %d;",
+                                rowID);
+            if (res != SQLITE_OK)
+                die("Failed to delete old property values: %s\n",
+                    sqlite3_errmsg(conn));
+
+            /* accordingly we delete any properties referring to it
+               TODO: deref propertygroup if needed??? */
+            res = sqlite3_execf(conn, NULL, NULL, NULL,
+                                "DELETE FROM Properties "
+                                "WHERE FK_PropertyValueID = %d;",
+                                rowID);
+            if (res != SQLITE_OK)
+                die("Failed to delete old properties: %s\n",
+                    sqlite3_errmsg(conn));
+        }
+    }
+
+    sqlite3_finalize(stmt);
+
+    res = sqlite3_execf(conn, NULL, NULL, NULL,
+                        "DELETE FROM Bundles WHERE BundleID = %d;", bundleID);
+    if (res != SQLITE_OK)
+        die("Failed to delete old bundle: %s\n", sqlite3_errmsg(conn));
+}
+
+void AddSys::import(int layer, const char *bundleFullPath, Class *klass)
 {
     int res;
+    int bundleID;
+    int rcOldBundle;
     int svcId;
 
+    /**
+     * Step 1: Begin the transaction.
+     */
     res = sqlite3_exec(conn, "BEGIN TRANSACTION;", NULL, NULL, NULL);
     if (res != SQLITE_OK)
         die("Failed to begin transaction: %s\n", sqlite3_errmsg(conn));
 
-    res = sqlite3_get_single_intf(conn, &svcId,
-                                  "SELECT 1 FROM Services WHERE Name = '%s';",
-                                  klass->name.c_str());
+    /**
+     * Step 2: If there is an old Bundle entry, then if its refcount is 0,
+     * delete it and all associated property values.
+     * TODO: check if old Bundle entry's MD5sum differs; if it doesn't, let it
+     * alone.
+     * TODO: add an 'old' field to either PropertyValues or Properties, and set
+     * it true if the backing bundle is gone but it's been retained due to
+     * extant references?
+     * TODO: what about administrative customisations? do we need to refcount
+     * per-prop rather than per bundle for these? I don't think we do.
+     */
+
+    res = sqlite3_get_two_intf(
+        conn, &bundleID, &rcOldBundle,
+        "SELECT BundleID, RefCount FROM Bundles WHERE Filename = '%s';",
+        bundleFullPath);
+
+    if (res == SQLITE_ROW)
+    {
+        printf("Have old bundle id %d.\n", bundleID);
+
+        /* a bundle's refcount is incremented during the creation of a snapshot.
+         * If the refcount is 0 - abolish it*/
+        if (!rcOldBundle)
+            deleteBundle(bundleID);
+    }
+    else if (res != SQLITE_DONE)
+        die("Failed to get bundle ID: %s\n", sqlite3_errmsg(conn));
+
+    /**
+     * Step 3: Add a Bundles entry.
+     */
+    res = sqlite3_execf(
+        conn, NULL, NULL, NULL,
+        "INSERT INTO Bundles(Filename, MD5Sum, Layer) VALUES('%s', 0, %d);",
+        bundleFullPath, layer);
+    if (res != SQLITE_OK)
+        die("Failed to insert bundle descriptor: %s\n", sqlite3_errmsg(conn));
+    bundleID = sqlite3_last_insert_rowid(conn);
+
+    /**
+     * Step 4: get or create a Services entry.
+     */
+    res = sqlite3_get_single_intf(
+        conn, &svcId, "SELECT ServiceID FROM Services WHERE Name = '%s';",
+        klass->name.c_str());
     if (res == SQLITE_DONE)
     {
         res = sqlite3_execf(conn, NULL, NULL, NULL,
@@ -137,9 +238,148 @@ void AddSys::import(int layer, Class *klass)
 
     printf("Service ID: %d\n", svcId);
 
+    /**
+     * Step 5: Import all service-level properties.
+     */
+    for (auto &prop : klass->properties)
+        importProp(bundleID, svcId, 0, 0, prop.get());
+
+    /**
+     * Step 5: Import all instances.
+     */
+    for (auto &inst : klass->instances)
+    {
+        int instId;
+
+        /**
+         * Step 5.1: Get or create an Instances entry.
+         */
+        res = sqlite3_get_single_intf(
+            conn, &instId,
+            "SELECT InstanceID FROM Instances "
+            "WHERE FK_Parent_ServiceID = %d AND Name = '%s';",
+            svcId, inst.name.c_str());
+        if (res == SQLITE_DONE)
+        {
+            printf("ADd instance\n");
+            res = sqlite3_execf(
+                conn, NULL, NULL, NULL,
+                "INSERT INTO Instances(FK_Parent_ServiceID, Name) "
+                "VALUES (%d, '%s');",
+                svcId, inst.name.c_str());
+            if (res != SQLITE_OK)
+                die("Failed to insert instance name: %d\n",
+                    sqlite3_errmsg(conn));
+            instId = sqlite3_last_insert_rowid(conn);
+        }
+        else if (res != SQLITE_ROW)
+            die("Failed to get instance ID: %s\n", sqlite3_errmsg(conn));
+
+        /**
+         * Step 5.2: Add all instance-level properties.
+         */
+        for (auto &prop : inst.properties)
+            importProp(bundleID, svcId, instId, 0, prop.get());
+    }
+
+    /**
+     * Finally: Commit the transaction.
+     */
     res = sqlite3_exec(conn, "COMMIT;", NULL, NULL, NULL);
     if (res != SQLITE_OK)
         die("Failed to commit: %s\n", sqlite3_errmsg(conn));
+}
+
+void AddSys::importProp(int bundleID, int parentSvcId, int parentInstId,
+                        int parentPageId, Property *prop)
+{
+    int propValId;
+    int res;
+    const char *propParentKey;
+    int propParentID;
+
+    PropString *str = dynamic_cast<PropString *>(prop);
+    PropPage *page = dynamic_cast<PropPage *>(prop);
+
+    if (str)
+    {
+        res = sqlite3_execf(conn, NULL, NULL, NULL,
+                            "INSERT INTO PropertyValues"
+                            "(FK_BundleID, Type, PropertyKey, StringValue)"
+                            "VALUES(%d, 'String', '%s', '%s');",
+                            bundleID, prop->key.c_str(), str->value.c_str());
+
+        if (res != SQLITE_OK)
+            die("Failed to insert property value: %s\n", sqlite3_errmsg(conn));
+
+        propValId = sqlite3_last_insert_rowid(conn);
+    }
+    else if (page)
+    {
+        int pageID;
+        const char *parentKey = parentPageId ? "FK_Parent_PropertyGroupID"
+                                             : "FK_Parent_ServiceID";
+        int parentID = parentPageId ? parentPageId : parentSvcId;
+
+        res = sqlite3_get_single_intf(
+            conn, &pageID,
+            "SELECT PropertyGroupID FROM PropertyGroups "
+            "WHERE %s = %d AND Name = '%s';",
+            parentKey, parentID, page->key.c_str());
+
+        if (res == SQLITE_DONE)
+        {
+            res = sqlite3_execf(
+                conn, NULL, NULL, NULL,
+                "INSERT INTO PropertyGroups(Name, %s) VALUES ('%s', %d);",
+                parentKey, page->key.c_str(), parentID);
+            if (res != SQLITE_OK)
+                die("Failed to insert property group entry: %s\n",
+                    sqlite3_errmsg(conn));
+            pageID = sqlite3_last_insert_rowid(conn);
+        }
+        else if (res != SQLITE_ROW)
+            die("Failed to get property group ID: %s\n", sqlite3_errmsg(conn));
+
+        for (auto &prop : page->properties)
+            importProp(bundleID, parentSvcId, parentInstId, pageID, prop.get());
+
+        res = sqlite3_execf(
+            conn, NULL, NULL, NULL,
+            "INSERT INTO PropertyValues "
+            "(FK_BundleID, Type, PropertyKey, FK_PageValue_PropertyGroupID) "
+            "VALUES(%d, 'Page', '%s', '%d');",
+            bundleID, prop->key.c_str(), pageID);
+
+        if (res != SQLITE_OK)
+            die("Failed to insert property value: %s\n", sqlite3_errmsg(conn));
+
+        propValId = sqlite3_last_insert_rowid(conn);
+    }
+
+    if (parentPageId)
+    {
+        propParentKey = "FK_Parent_PropertyGroupID";
+        propParentID = parentPageId;
+    }
+    else if (parentInstId)
+    {
+        propParentKey = "FK_Parent_InstanceID";
+        propParentID = parentInstId;
+    }
+    else
+    {
+        propParentKey = "FK_Parent_ServiceID";
+        propParentID = parentSvcId;
+    }
+
+    res = sqlite3_execf(conn, NULL, NULL, NULL,
+                        "INSERT INTO Properties(%s, FK_PropertyValueID) "
+                        "VALUES (%d, %d);",
+                        propParentKey, propParentID, propValId);
+
+    if (res != SQLITE_OK)
+        die("Failed to insert property: %s\n", sqlite3_errmsg(conn));
 }
 
 void AddSys::parse(int layer, const char *bundlePath)
@@ -373,7 +613,13 @@ int AddSys::main(int argc, char *argv[])
     parse(layer, argv[optind]);
 
     for (auto &klass : classes)
-        import(layer, &klass);
+    {
+        char fullPath[MAXPATHLEN];
+        realpath(argv[optind], fullPath);
+        import(layer, fullPath, &klass);
+    }
+
+    sqlite3_close_v2(conn);
 
     return 0;
 }

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS "Snapshots" (
 );
 CREATE TABLE IF NOT EXISTS "Bundles" (
 	"BundleID"	INTEGER NOT NULL UNIQUE,
+	"RefCount"	INTEGER NOT NULL DEFAULT 0,
 	"Filename"	INTEGER NOT NULL,
 	"MD5Sum"	INTEGER NOT NULL,
 	"Layer"	INTEGER NOT NULL CHECK("Layer" = 1 OR "Layer" = 2 OR "Layer" = 3 OR "Layer" = 4),
@@ -36,7 +37,6 @@ CREATE TABLE IF NOT EXISTS "Metadata" (
 );
 CREATE TABLE IF NOT EXISTS "Properties" (
 	"PropertyID"	INTEGER NOT NULL UNIQUE,
-	"RefCount"	INTEGER NOT NULL,
 	"FK_Parent_InstanceID"	INTEGER,
 	"FK_Parent_ServiceID"	INTEGER,
 	"FK_Parent_PropertyGroupID"	INTEGER,
@@ -49,19 +49,19 @@ CREATE TABLE IF NOT EXISTS "Properties" (
 );
 CREATE TABLE IF NOT EXISTS "PropertyValues" (
 	"PropertyValueID"	INTEGER NOT NULL UNIQUE,
-	"RefCount"	INTEGER NOT NULL,
 	"FK_BundleID"	INTEGER,
 	"Type"	TEXT NOT NULL CHECK("Type" = 'String' OR "Type" = 'Page'),
 	"PropertyKey"	TEXT NOT NULL,
 	"StringValue"	TEXT,
 	"FK_PageValue_PropertyGroupID"	INTEGER,
-	PRIMARY KEY("PropertyValueID"),
+	PRIMARY KEY("PropertyValueID" AUTOINCREMENT),
 	FOREIGN KEY("FK_PageValue_PropertyGroupID") REFERENCES "PropertyGroups"("PropertyGroupID"),
 	FOREIGN KEY("FK_BundleID") REFERENCES "Bundles"("BundleID")
 );
 CREATE TABLE IF NOT EXISTS "PropertyGroups" (
 	"PropertyGroupID"	INTEGER NOT NULL UNIQUE,
-	"RefCount"	INTEGER NOT NULL,
+	"Name"				STRING NOT NULL,
+	"RefCount"	INTEGER NOT NULL DEFAULT 0,
 	"FK_Parent_ServiceID"	INTEGER,
 	"FK_Parent_PropertyGroupID"	INTEGER,
 	PRIMARY KEY("PropertyGroupID" AUTOINCREMENT),
