@@ -74,12 +74,12 @@ int LsSys::main(int argc, char *argv[])
     loop.init();
     loop.addFD(this, fd, POLLIN | POLLHUP);
 
-    auto comp =
-        io_eComCloud_eci_IManagerClnt::subscribe_v1_async(&xprt, this, 2);
+    int ret;
 
-    loop.loop(NULL);
+    auto res =
+        io_eComCloud_eci_IManagerClnt::snapshot_v1(&xprt, &ret, 1, "hello");
 
-    xprt.readyForRead();
+    printf("Ret: %d. %s.\n", ret, res.errmsg.c_str());
 
     return fd;
 }

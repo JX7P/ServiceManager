@@ -2,6 +2,10 @@ WSRPCGen(
   INPUT io.eComCloud.eci.IManager.x
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager)
 
+MakeHeader(
+  ${CMAKE_CURRENT_SOURCE_DIR}/queryGetInstancePropertiesComposed.sql 
+  eci/queryGetInstancePropertiesComposed.sql.h)
+
 configure_file (${HDR}/eci/Platform.h.in
   ${CMAKE_CURRENT_BINARY_DIR}/eci/Platform.h)
 
@@ -15,7 +19,8 @@ add_library(eci
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager.hh
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_clnt.cc
   ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_conv.cc
-  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_svc.cc)
+  ${CMAKE_CURRENT_BINARY_DIR}/io.eComCloud.eci.IManager_svc.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/eci/queryGetInstancePropertiesComposed.sql.h)
 target_link_libraries (eci eci-core rt ucl)
 
 # installation

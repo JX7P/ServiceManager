@@ -5,15 +5,15 @@ WITH
  */
 InstanceValues(PropertyID, FK_PropertyValueID)
   AS(SELECT PropertyID, FK_PropertyValueID FROM Properties
-			WHERE FK_Parent_InstanceID = 1 ),
+			WHERE FK_Parent_InstanceID = :instanceID),
 
 /**
  * Select ALL properties and their value IDs parented to the instance.
  */
 ServiceValues(PropertyID, FK_PropertyValueID)
   AS(SELECT PropertyID, FK_PropertyValueID FROM Properties
-	 WHERE FK_Parent_ServiceID = 
-		(SELECT FK_Parent_ServiceID FROM Instances WHERE InstanceID = 1 )),
+	 WHERE FK_Parent_ServiceID =
+		(SELECT FK_Parent_ServiceID FROM Instances WHERE InstanceID = :instanceID)),
 
 /**
  * Collect together the instance- and service-parented property IDs and their

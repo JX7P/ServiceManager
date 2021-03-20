@@ -21,16 +21,27 @@ included with this software
 #include "eci/Logger.hh"
 
 class Manager;
+class InstanceName;
 struct sqlite3;
+struct sqlite3_stmt;
 
 class Backend : public Logger
 {
     friend class Manager;
 
+    Manager *mgr;
+
     sqlite3 *connPersistent;
     sqlite3 *connVolatile;
 
-    Manager *mgr;
+    /**
+     * Prepared statement to select the latest composed set of properties from
+     * an instance ID in the persistent repository.
+     *
+     * Use sqlite_bind_int(permNstCurProps, 1, $nstID) to
+     * set the instance ID to retrieve properties therefrom.
+     */
+    sqlite3_stmt *permNstCurProps;
 
     /**
      * Path to the persistent repository - we need it so that, should we
@@ -54,6 +65,32 @@ class Backend : public Logger
     int metadataValidate(sqlite3 *conn);
     /** Set the schema version in the Metadata table. -1 on fail. */
     int metadataSetVersion(sqlite3 *conn);
+
+    /**
+     * Find the given instance in the persistent database.
+     *
+     * @param instName (absolute) instance name to look up.
+     *
+     * @returns instance ID (>0) if found
+     * @returns 0 if not found
+     */
+    int persistentInstanceLookup(InstanceName &name);
+
+    /**
+     * Make a snapshot of the given instance's current composed view of
+     * properties.
+     *
+     * The properties are recursively copied; to avoid duplication of data, the
+     * PropertyValues to which they point are not copied; changes in
+     * configuration trigger new PropertyValues to be created anyway.
+     *
+     * If a snapshot of the given name already exists for the instance, then it
+     * is deleted outright and replaced.
+     *
+     * @returns snapshot ID (>0) if successful
+     * @returns -ENOENT if instance does not exist
+     */
+    int persistentInstanceSnapshotCreate(int instanceID, const char *name);
 
     /** Initialise a new repository with the given schema. -1 on fail. */
     int repositoryInit(sqlite3 *conn, const char *schema);

@@ -135,6 +135,8 @@ class Manager : public Handler,
   private:
     /* RPC methods */
     bool subscribe_v1(WSRPCReq *req, std::string *rval, int hello);
+    bool snapshot_v1(WSRPCReq *req, int *rval, int instanceID,
+                     std::string name);
 
     /* event handlers */
     void fdEvent(EventLoop *loop, int fd, int revents);

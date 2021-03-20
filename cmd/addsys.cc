@@ -123,7 +123,7 @@ class AddSys : Logger, io_eComCloud_eci_IManagerDelegate, Handler
 void AddSys::deleteBundle(int bundleID)
 {
     sqlite3_stmt *stmt;
-    int res = sqlite3_prepare_v2f(conn, &stmt, 0,
+    int res = sqlite3_prepare_v2f(conn, &stmt, NULL,
                                   "SELECT rowid FROM PropertyValues "
                                   "WHERE FK_BundleID = %d;",
                                   bundleID);

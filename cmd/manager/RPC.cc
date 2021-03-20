@@ -23,3 +23,10 @@ bool Manager::subscribe_v1(WSRPCReq *req, std::string *rval, int hello)
     *rval = "Hello";
     return true;
 }
+
+bool Manager::snapshot_v1(WSRPCReq *req, int *rval, int instanceID,
+                          std::string name)
+{
+    bend.persistentInstanceSnapshotCreate(instanceID, name.c_str());
+    return true;
+}

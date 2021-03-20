@@ -24,6 +24,7 @@ included with this software
 #include "Manager.hh"
 #include "eci/Core.h"
 #include "eci/SQLite.h"
+#include "eci/queryGetInstancePropertiesComposed.sql.h"
 #include "repositorySchema.sql.h"
 #include "sqlite3.h"
 #include "volatileRepositorySchema.sql.h"
@@ -69,7 +70,7 @@ int Backend::metadataValidate(sqlite3 *conn)
     int ver;
 
     res = sqlite3_get_single_int(conn, &ver, "SELECT Version FROM Metadata;");
-    if (res != SQLITE_OK)
+    if (res != SQLITE_ROW)
     {
         log(kErr, "Failed to get version from the metadata table: %s\n",
             sqlite3_errmsg(conn));
@@ -80,6 +81,60 @@ int Backend::metadataValidate(sqlite3 *conn)
 
 int Backend::metadataSetVersion(sqlite3 *conn)
 {
+}
+
+int Backend::persistentInstanceLookup(InstanceName &name)
+{
+    int svcId;
+    int instId;
+    int res;
+
+    res = sqlite3_get_single_intf(connPersistent, &svcId,
+                                  "SELECT ServiceID FROM Services"
+                                  "WHERE Type = '%s' AND Name = '%s';",
+                                  name.type.c_str(), name.svc.c_str());
+    if (res != SQLITE_ROW)
+    {
+        log(kDebug, "No such service %s$%s\n", name.type.c_str(),
+            name.svc.c_str());
+        return -ENOENT;
+    }
+
+    res = sqlite3_get_single_intf(connPersistent, &instId,
+                                  "SELECT InstanceID FROM Instances"
+                                  "WHERE FK_Parent_ServiceID = %d"
+                                  "AND Name = '%s';",
+                                  svcId, name.nst.c_str());
+    if (res != SQLITE_ROW)
+    {
+        log(kDebug, "No such instance %s of service %s$%s\n", name.nst.c_str(),
+            name.type.c_str(), name.svc.c_str());
+        return -ENOENT;
+    }
+
+    return instId;
+}
+
+int Backend::persistentInstanceSnapshotCreate(int instanceID, const char *name)
+{
+    int res = sqlite3_bind_int(permNstCurProps, 1, instanceID);
+
+    if (res != SQLITE_OK)
+        die("Failed to bind composed property lookup statement: %s\n",
+            sqlite3_errmsg(connPersistent));
+
+    while ((res = sqlite3_step(permNstCurProps)) != SQLITE_DONE)
+    {
+        if (res == SQLITE_ROW)
+        {
+            int rowID = sqlite3_column_int(permNstCurProps, 0);
+            printf("Row: %d\n", rowID);
+        }
+    }
+
+    sqlite3_reset(permNstCurProps);
+
+    return 0;
 }
 
 int Backend::repositoryInit(sqlite3 *conn, const char *schema)
@@ -101,6 +156,8 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
                    bool startReadOnly, bool recreatePersistentDb,
                    bool reattachVolatileRepository)
 {
+    int res;
+
     pathPersistentDb = aPathPersistentDb;
     pathVolatileDb = aPathVolatileDb;
     readOnly = startReadOnly;
@@ -110,8 +167,6 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     /* setup persistent repository */
     if (recreatePersistentDb)
     {
-        int res;
-
         log(kInfo, "(re)creating persistent reposistory %s\n",
             pathPersistentDb);
 
@@ -132,8 +187,6 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     }
     else
     {
-        int res;
-
         log(kDebug, "attaching to existing persistent repository %s as %s\n",
             pathPersistentDb, readOnly ? "read-only" : "read-write");
 
@@ -157,8 +210,6 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     /* setup volatile repository */
     if (reattachVolatileRepository) /* must also be in read-write mode */
     {
-        int res;
-
         log(kInfo, "reattaching to existing volatile repository %s\n",
             pathVolatileDb);
 
@@ -178,7 +229,6 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     }
     else if (startReadOnly || !pathVolatileDb)
     {
-        int res;
         /* checking if pathVolatileDb should've been set isn't our duty */
         log(kInfo, "creating in-memory volatile repository\n");
 
@@ -197,8 +247,6 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
     }
     else
     {
-        int res;
-
         log(kInfo, "(re)creating volatile repository %s\n", pathVolatileDb);
 
         if (unlink(pathVolatileDb) == -1 && errno != ENOENT)
@@ -218,6 +266,15 @@ void Backend::init(const char *aPathPersistentDb, const char *aPathVolatileDb,
             die("Failed to initialise volatile repository: %s\n",
                 sqlite3_errmsg(connVolatile));
     }
+
+    res = sqlite3_prepare_v2(connPersistent,
+                             kqueryGetInstancePropertiesComposed_sql, -1,
+                             &permNstCurProps, NULL);
+    if (res != SQLITE_OK)
+        die("Failed to ready prepared statements: %s",
+            sqlite3_errmsg(connPersistent));
+
+    printf("Stmt: %p.\n", permNstCurProps);
 }
 
 void Backend::shutdown()

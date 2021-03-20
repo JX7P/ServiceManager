@@ -22,6 +22,8 @@ included with this software
 
 %#include "eci/ECI.hh"
 
+//#import "io.eComCloud.init.x"
+
 union PropertyValue {
 	case kString:
 		string str;
@@ -38,5 +40,7 @@ program io.eComCloud.eci.IManager
 		 * protocol.
 		 */
 		string subscribe(int hello) = 0;
+
+		int snapshot(int instanceID, string name) = 0;
 	} = 1;
 } = 0x40DD1001;
